@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from ultralytics.nn.modules import (C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x, Classify,
                                     Concat, Conv, ConvTranspose, Detect, DWConv, DWConvTranspose2d, Ensemble, Focus,
-                                    GhostBottleneck, GhostConv, Pose, Segment)
+                                    GhostBottleneck, GhostConv, Pose, Segment, GGhostRegNet, GHOSTBottleneck)
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.yolo.utils.torch_utils import (fuse_conv_and_bn, fuse_deconv_and_bn, initialize_weights,
@@ -55,6 +55,7 @@ class BaseModel(nn.Module):
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
+            # print(m)
             x = m(x)  # run
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
@@ -187,7 +188,7 @@ class DetectionModel(BaseModel):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
+            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(2, ch, s, s))])  # forward
             self.stride = m.stride
             m.bias_init()  # only run once
 
@@ -453,6 +454,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
     ch = [ch]
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
+    GHOSTBottleneck_layers, widths = [], []
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
         m = getattr(torch.nn, m[3:]) if 'nn.' in m else globals()[m]  # get module
         for j, a in enumerate(args):
@@ -471,6 +473,14 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x):
                 args.insert(2, n)  # number of repeats
                 n = 1
+        elif m is GGhostRegNet:
+            widths.append(args[0])
+            if args[1] != 0:
+                widths[-2] = ch[f]
+            block = GHOSTBottleneck
+            GHOSTBottleneck_layers.append(n)
+            args = [block, GHOSTBottleneck_layers, widths, args[1]]
+            n = 1
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
@@ -505,7 +515,7 @@ def yaml_model_load(path):
         LOGGER.warning(f'WARNING ⚠️ Ultralytics YOLO P6 models now use -p6 suffix. Renaming {path.stem} to {new_stem}.')
         path = path.with_stem(new_stem)
 
-    unified_path = re.sub(r'(\d+)([nslmx])(.+)?$', r'\1\3', str(path))  # i.e. yolov8x.yaml -> yolov8.yaml
+    unified_path = re.sub(r'(\d+)([nslmx])(.+)?$', r'\1\3', str(path))  # i.e. yolov8x.yaml -> yolov8-SPPCSPC.yaml
     yaml_file = check_yaml(unified_path, hard=False) or check_yaml(path)
     d = yaml_load(yaml_file)  # model dict
     d['scale'] = guess_model_scale(path)
