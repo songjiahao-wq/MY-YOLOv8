@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
  
 class GAM_Attention(nn.Module):
-    def __init__(self, in_channels, rate=4):
+    def __init__(self, in_channels,c2, rate=4):
         super(GAM_Attention, self).__init__()
  
         self.channel_attention = nn.Sequential(

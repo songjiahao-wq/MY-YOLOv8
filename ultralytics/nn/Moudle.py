@@ -1,1 +1,2 @@
-from ultralytics.nn.fighting_model.attention import *
+#add ATT
+from add.cv_attention import GAM_Attention
