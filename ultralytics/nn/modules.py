@@ -10,6 +10,8 @@ import torch.nn as nn
 
 from ultralytics.yolo.utils.tal import dist2bbox, make_anchors
 from ultralytics.nn.Moudle import *
+from timm.models.layers import DropPath
+from ultralytics.nn.Moudle import *
 
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     # Pad to 'same' shape outputs
@@ -142,7 +144,8 @@ class Bottleneck_ATT(nn.Module):
         has_ATT = use_ATT is not None and use_ATT > 0.
         # Squeeze-and-excitation
         if has_ATT:
-            self.ATT = GAM_Attention(c2,c2)
+            # self.ATT = GAM_Attention(c2,c2)
+            self.ATT = BiLevelRoutingAttention(c2,c2)
         else:
             self.ATT = None
     def forward(self, x):
@@ -218,6 +221,7 @@ class C2f(nn.Module):
         y = list(self.cv1(x).split((self.c, self.c), 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
+
 class C2f_Bottleneck_ATT(nn.Module):
     # CSP Bottleneck with 2 convolutions
     def __init__(self, c1, c2, n=1, shortcut=False, use_ATT=0., g=1,
@@ -341,6 +345,21 @@ class SPPF(nn.Module):
         y2 = self.m(y1)
         return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
 
+class SPPF_Biformer(nn.Module):
+    # Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher
+    def __init__(self, c1, c2, k=5):  # equivalent to SPP(k=(5, 9, 13))
+        super().__init__()
+        c_ = c1 // 2  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c_ * 4, c2, 1, 1)
+        self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+
+
+    def forward(self, x):
+        x = self.cv1(x)
+        y1 = self.m(x)
+        y2 = self.m(y1)
+        return self.cv2(torch.cat((x, y1, y2, self.m(y2)), 1))
 
 class Focus(nn.Module):
     # Focus wh information into c-space
@@ -798,3 +817,93 @@ class GGhostRegNet(nn.Module):
     def forward(self, x):
         return self._forward_impl(x)
 # GhostNetV2 end************************************
+#Faster_Block start********************************
+class Faster_Block(nn.Module):
+    def __init__(self,
+                 inc,
+                 dim,
+                 n_div=4,
+                 mlp_ratio=2,
+                 drop_path=0.1,
+                 layer_scale_init_value=0.0,
+                 pconv_fw_type='split_cat'
+                 ):
+        super().__init__()
+        self.dim = dim
+        self.mlp_ratio = mlp_ratio
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.n_div = n_div
+
+        mlp_hidden_dim = int(dim * mlp_ratio)
+
+        mlp_layer = [
+            Conv(dim, mlp_hidden_dim, 1),
+            nn.Conv2d(mlp_hidden_dim, dim, 1, bias=False)
+        ]
+
+        self.mlp = nn.Sequential(*mlp_layer)
+
+        self.spatial_mixing = Partial_conv3(
+            dim,
+            n_div,
+            pconv_fw_type
+        )
+
+        self.adjust_channel = None
+        if inc != dim:
+            self.adjust_channel = Conv(inc, dim, 1)
+
+        if layer_scale_init_value > 0:
+            self.layer_scale = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
+            self.forward = self.forward_layer_scale
+        else:
+            self.forward = self.forward
+
+    def forward(self, x):
+        if self.adjust_channel is not None:
+            x = self.adjust_channel(x)
+        shortcut = x
+        x = self.spatial_mixing(x)
+        x = shortcut + self.drop_path(self.mlp(x))
+        return x
+
+    def forward_layer_scale(self, x):
+        shortcut = x
+        x = self.spatial_mixing(x)
+        x = shortcut + self.drop_path(
+            self.layer_scale.unsqueeze(-1).unsqueeze(-1) * self.mlp(x))
+        return x
+class Partial_conv3(nn.Module):
+    def __init__(self, dim, n_div, forward):
+        super().__init__()
+        self.dim_conv3 = dim // n_div
+        self.dim_untouched = dim - self.dim_conv3
+        self.partial_conv3 = nn.Conv2d(self.dim_conv3, self.dim_conv3, 3, 1, 1, bias=False)
+
+        if forward == 'slicing':
+            self.forward = self.forward_slicing
+        elif forward == 'split_cat':
+            self.forward = self.forward_split_cat
+        else:
+            raise NotImplementedError
+
+    def forward_slicing(self, x):
+        # only for inference
+        x = x.clone()  # !!! Keep the original input intact for the residual connection later
+        x[:, :self.dim_conv3, :, :] = self.partial_conv3(x[:, :self.dim_conv3, :, :])
+        return x
+
+    def forward_split_cat(self, x):
+        # for training/inference
+        x1, x2 = torch.split(x, [self.dim_conv3, self.dim_untouched], dim=1)
+        x1 = self.partial_conv3(x1)
+        x = torch.cat((x1, x2), 1)
+        return x
+
+class C2f_Faster(C2f):
+    # C3 module with TransformerBlock()
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        c_ = int(c2 * e)
+        self.m = nn.Sequential(*(Faster_Block(c_, c_) for _ in range(n)))
+#Faster_Block end********************************
