@@ -1,0 +1,1 @@
+yolo detect train data=VOC_five.yaml model=yolov8n.yaml epochs=100 imgsz=640
