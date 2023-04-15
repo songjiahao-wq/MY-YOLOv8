@@ -493,6 +493,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             GHOSTBottleneck_layers.append(n)
             args = [block, GHOSTBottleneck_layers, widths, args[1]]
             n = 1
+        elif m is HorNet:
+            c2 = args[0]
+            args = args[1:]
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
