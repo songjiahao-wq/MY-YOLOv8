@@ -92,7 +92,7 @@ class ConvNeXtV2(nn.Module):
         drop_path_rate (float): Stochastic depth rate. Default: 0.
         head_init_scale (float): Init scaling value for classifier weights and biases. Default: 1.
     """
-    def __init__(self, in_chans=3, num_classes=1000, 
+    def __init__(self, in_chans=3, layers=0,num_classes=1000,
                  depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], 
                  drop_path_rate=0., head_init_scale=1.
                  ):
@@ -137,15 +137,28 @@ class ConvNeXtV2(nn.Module):
         for i in range(4):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
-        return self.norm(x.mean([-2, -1])) # global average pooling, (N, C, H, W) -> (N, C)
+        # return self.norm(x.mean([-2, -1])) # global average pooling, (N, C, H, W) -> (N, C)
+        return self.norm(x) # global average pooling, (N, C, H, W) -> (N, C)
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        # print(x.shape)
+        # x = self.head(x)
         return x
 
+model_urls={
+    "convnextv2_atto": "https://dl.fbaipublicfiles.com/convnext/convnextv2/pt_only/convnextv2_atto_1k_224_fcmae.pt",
+    "convnext_small_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_small_1k_224_ema.pth",
+    "convnext_base_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_base_1k_224_ema.pth",
+    "convnext_large_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_large_1k_224_ema.pth",
+    "convnext_base_22k": "https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_224.pth",
+    "convnext_large_22k": "https://dl.fbaipublicfiles.com/convnext/convnext_large_22k_224.pth",
+    "convnext_xlarge_22k": "https://dl.fbaipublicfiles.com/convnext/convnext_xlarge_22k_224.pth",
+}
+
+
 def convnextv2_atto(**kwargs):
-    model = ConvNeXtV2(depths=[2, 2, 6, 2], dims=[40, 80, 160, 320], **kwargs)
+    model = ConvNeXtV2(depths=[1, 2, 3, 1], dims=[64, 128, 256, 512], **kwargs)
     return model
 
 def convnextv2_femto(**kwargs):
@@ -176,8 +189,32 @@ def convnextv2_huge(**kwargs):
     model = ConvNeXtV2(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], **kwargs)
     return model
 
+class convnextv2_att(nn.Module):
+    def __init__(self, c2, Layers=0):
+        super().__init__()
+        models = convnextv2_atto()
+        models = list(models.children())
+        modules = []
+
+        modules.append(models[0][Layers])
+        modules.append(models[1][Layers])
+        self.model = nn.Sequential(*modules)
+
+    def forward(self, x):
+        return self.model(x)
+
+
 if __name__ == "__main__":
     model = convnextv2_atto()
-    input = torch.randn(1, 3, 224, 224)
-    out = model(input)
-    print(out.shape)
+    input = torch.randn(1, 3, 640, 640) #输入
+    model = list(model.children()) #输入这个方法返回一个可迭代对象，可以使用 model.children() 方法获取模型的直接子层
+                                    # 可以用 list() 函数将其转换为列表形式。
+    for i in range(4):
+        models = []
+        models.append(model[0][i])  #model[0][i]是取第一层列表中的下采样层
+        models.append(model[1][i])  #model[0][i]是取第二层列表中的block层
+        models = nn.Sequential(*models)  #封装网络层
+        print(models)
+        out = models(input)
+        print(out.shape)
+        input = out

@@ -267,7 +267,7 @@ class MetaNeXt(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.forward_head(x)
+        # x = self.forward_head(x)
         return x
 
     def _init_weights(self, m):
@@ -306,7 +306,7 @@ default_cfgs = dict(
 
 
 @register_model
-def inceptionnext_tiny(pretrained=False, **kwargs):
+def inceptionnext_tiny(pretrained=True, **kwargs):
     model = MetaNeXt(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768),
                      token_mixers=InceptionDWConv2d,
                      **kwargs
@@ -320,7 +320,7 @@ def inceptionnext_tiny(pretrained=False, **kwargs):
 
 
 @register_model
-def inceptionnext_small(pretrained=False, **kwargs):
+def inceptionnext_small(pretrained=True, **kwargs):
     model = MetaNeXt(depths=(3, 3, 27, 3), dims=(96, 192, 384, 768),
                      token_mixers=InceptionDWConv2d,
                      **kwargs
@@ -360,3 +360,29 @@ def inceptionnext_base_384(pretrained=False, **kwargs):
             url=model.default_cfg['url'], map_location="cpu", check_hash=True)
         model.load_state_dict(state_dict)
     return model
+
+class InceptionNext_small(nn.Module):
+    def __init__(self, c2, Layers=0 ):
+        super().__init__()
+        models = inceptionnext_tiny(pretrained=False)
+        modules = list(models.stages)
+        modules = modules[Layers]
+        self.model = nn.Sequential(modules)
+
+    def forward(self, x):
+        return self.model(x)
+
+if __name__ == '__main__':
+
+    input=torch.randn(1,96,224,224)
+    model = inceptionnext_tiny()
+    # p =model.stages[1]
+    modules = list(model.stages)
+    # module = modules[1]
+    for i in range(4):
+        moduless = nn.Sequential(modules[i])
+        out = moduless(input)
+        input = out
+        print(out.shape)
+    # output=p(input)
+    # print(output.shape)

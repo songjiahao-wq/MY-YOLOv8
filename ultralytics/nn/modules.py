@@ -8,6 +8,7 @@ import math
 import torch
 import torch.nn as nn
 
+import numpy as np
 from ultralytics.yolo.utils.tal import dist2bbox, make_anchors
 from ultralytics.nn.Moudle import *
 from timm.models.layers import DropPath
@@ -132,18 +133,6 @@ class Bottleneck(nn.Module):
     def forward(self, x):
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
-class Bottleneck_PConv(nn.Module):
-    # Standard bottleneck
-    def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5):  # ch_in, ch_out, shortcut, groups, kernels, expand
-        super().__init__()
-        c_ = int(c2 * e)  # hidden channels
-        self.cv1 = PConv(c1, c_, k[0], 1) #可改PConv
-        self.cv2 = PConv(c_, c2, 4)
-        self.add = shortcut and c1 == c2
-
-    def forward(self, x):
-        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
-
 class Bottleneck_ATT(nn.Module):
     # Standard bottleneck
     def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5, use_ATT=0.):  # ch_in, ch_out, shortcut, groups, kernels, expand
@@ -233,12 +222,6 @@ class C2f(nn.Module):
         y = list(self.cv1(x).split((self.c, self.c), 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
-
-class C2f_PConv(C2f):
-    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
-        super().__init__(c1, c2, n, shortcut, g, e)
-        self.c = int(c2 * e)  # hidden channels
-        self.m = nn.ModuleList(Bottleneck_PConv(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
 
 class C2f_Bottleneck_ATT(nn.Module):
     # CSP Bottleneck with 2 convolutions
@@ -955,3 +938,313 @@ class PConv(nn.Module):
         x = self.conv(x)
         return x
 #Faster_Block end********************************
+# -------------------------------------------------------------------------
+# EfficientNetLite
+class drop_connect:
+    def __init__(self, drop_connect_rate):
+        self.drop_connect_rate = drop_connect_rate
+
+    def forward(self, x, training):
+        if not training:
+            return x
+        keep_prob = 1.0 - self.drop_connect_rate
+        batch_size = x.shape[0]
+        random_tensor = keep_prob
+        random_tensor += torch.rand([batch_size, 1, 1, 1], dtype=x.dtype, device=x.device)
+        binary_mask = torch.floor(random_tensor)  # 1
+        x = (x / keep_prob) * binary_mask
+        return x
+
+
+class stem(nn.Module):
+    def __init__(self, c1, c2, act='ReLU6'):
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, kernel_size=3, stride=2, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(num_features=c2)
+        if act == 'ReLU6':
+            self.act = nn.ReLU6(inplace=True)
+
+    def forward(self, x):
+        return self.act(self.bn(self.conv(x)))
+
+
+class MBConvBlock(nn.Module):
+    def __init__(self, inp, final_oup, k, s, expand_ratio, drop_connect_rate, has_se=False):
+        super(MBConvBlock, self).__init__()
+
+        self._momentum = 0.01
+        self._epsilon = 1e-3
+        self.input_filters = inp
+        self.output_filters = final_oup
+        self.stride = s
+        self.expand_ratio = expand_ratio
+        self.has_se = has_se
+        self.id_skip = True  # skip connection and drop connect
+        se_ratio = 0.25
+
+        # Expansion phase
+        oup = inp * expand_ratio  # number of output channels
+        if expand_ratio != 1:
+            self._expand_conv = nn.Conv2d(in_channels=inp, out_channels=oup, kernel_size=1, bias=False)
+            self._bn0 = nn.BatchNorm2d(num_features=oup, momentum=self._momentum, eps=self._epsilon)
+
+        # Depthwise convolution phase
+        self._depthwise_conv = nn.Conv2d(
+            in_channels=oup, out_channels=oup, groups=oup,  # groups makes it depthwise
+            kernel_size=k, padding=(k - 1) // 2, stride=s, bias=False)
+        self._bn1 = nn.BatchNorm2d(num_features=oup, momentum=self._momentum, eps=self._epsilon)
+
+        # Squeeze and Excitation layer, if desired
+        if self.has_se:
+            num_squeezed_channels = max(1, int(inp * se_ratio))
+            self.se = SeBlock(oup, 4)
+            # self.se = CA(oup,oup, 4)
+
+        # Output phase
+        self._project_conv = nn.Conv2d(in_channels=oup, out_channels=final_oup, kernel_size=1, bias=False)
+        self._bn2 = nn.BatchNorm2d(num_features=final_oup, momentum=self._momentum, eps=self._epsilon)
+        self._relu = nn.ReLU6(inplace=True)
+
+        self.drop_connect = drop_connect(drop_connect_rate)
+
+    def forward(self, x, drop_connect_rate=None):
+        """
+        :param x: input tensor
+        :param drop_connect_rate: drop connect rate (float, between 0 and 1)
+        :return: output of block
+        """
+
+        # Expansion and Depthwise Convolution
+        identity = x
+        if self.expand_ratio != 1:
+            x = self._relu(self._bn0(self._expand_conv(x)))
+        x = self._relu(self._bn1(self._depthwise_conv(x)))
+
+        # Squeeze and Excitation
+        if self.has_se:
+            x = self.se(x)
+
+        x = self._bn2(self._project_conv(x))
+
+        # Skip connection and drop connect
+        if self.id_skip and self.stride == 1 and self.input_filters == self.output_filters:
+            if drop_connect_rate:
+                x = self.drop_connect(x, training=self.training)
+            x += identity  # skip connection
+        return x
+# -------------------------------------------------------------------------
+# SE-Net Adaptive avg pooling --> fc --> fc --> Sigmoid
+class SeBlock(nn.Module):
+    def __init__(self, in_channel, reduction=4):
+        super().__init__()
+        self.Squeeze = nn.AdaptiveAvgPool2d(1)
+
+        self.Excitation = nn.Sequential()
+        self.Excitation.add_module('FC1', nn.Conv2d(in_channel, in_channel // reduction, kernel_size=1))  # 1*1卷积与此效果相同
+        self.Excitation.add_module('ReLU', nn.ReLU())
+        self.Excitation.add_module('FC2', nn.Conv2d(in_channel // reduction, in_channel, kernel_size=1))
+        self.Excitation.add_module('Sigmoid', nn.Sigmoid())
+
+    def forward(self, x):
+        y = self.Squeeze(x)
+        ouput = self.Excitation(y)
+        return x*(ouput.expand_as(x))
+
+class MixConv2d(nn.Module):
+    # Mixed Depth-wise Conv https://arxiv.org/abs/1907.09595
+    def __init__(self, c1, c2, k=(1, 3), s=1, equal_ch=True):  # ch_in, ch_out, kernel, stride, ch_strategy
+        super().__init__()
+        n = len(k)  # number of convolutions
+        if equal_ch:  # equal c_ per group
+            i = torch.linspace(0, n - 1E-6, c2).floor()  # c2 indices
+            c_ = [(i == g).sum() for g in range(n)]  # intermediate channels
+        else:  # equal weight.numel() per group
+            b = [c2] + [0] * n
+            a = np.eye(n + 1, n, k=-1)
+            a -= np.roll(a, 1, axis=1)
+            a *= np.array(k) ** 2
+            a[0] = 1
+            c_ = np.linalg.lstsq(a, b, rcond=None)[0].round()  # solve for equal weight indices, ax = b
+
+        self.m = nn.ModuleList([
+            nn.Conv2d(c1, int(c_), k, s, k // 2, groups=math.gcd(c1, int(c_)), bias=False) for k, c_ in zip(k, c_)])
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        return self.act(self.bn(torch.cat([m(x) for m in self.m], 1)))
+#exp******************************************************
+class SpectralAttention(nn.Module):
+    def __init__(self, in_channels,c2):
+        super(SpectralAttention, self).__init__()
+
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.fc1 = nn.Linear(in_channels, in_channels // 16)
+        self.relu = nn.ReLU(inplace=True)
+        self.fc2 = nn.Linear(in_channels // 16, in_channels)
+
+    def forward(self, x):
+        b, c, h, w = x.size()
+
+        # 计算注意力权重
+        y = self.avgpool(x).view(b, c)
+        y = self.fc1(y)
+        y = self.relu(y)
+        y = self.fc2(y)
+        attention_weights = torch.sigmoid(y).view(b, c, 1, 1)
+        x = x.to(torch.float32)
+
+        # 计算傅里叶变换
+        x_fft = torch.fft.fft2(x)
+
+        # 应用注意力权重
+        x_fft_weighted = x_fft * attention_weights
+
+        # 反傅里叶变换
+        x_weighted = torch.fft.ifft2(x_fft_weighted).real
+        # 将数据类型更改回torch.float16
+        # x_weighted = x_weighted.to(torch.float16)
+        return x_weighted
+class SoftThresholdAttentionResidual(nn.Module):
+    def __init__(self, in_channels,c2, reduction_ratio=16, threshold=0.1):
+        super(SoftThresholdAttentionResidual, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(in_channels, in_channels // reduction_ratio, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_channels // reduction_ratio, in_channels, bias=False),
+        )
+        self.GLU = nn.GLU()
+        self.sigmoid = nn.Sigmoid()
+        self.threshold = nn.Parameter(torch.tensor([threshold]))
+        self.bias = nn.Parameter(torch.zeros(1, in_channels, 1, 1))
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        y = self.sigmoid(y)
+        threshold = self.threshold.view(1, -1, 1, 1)
+        y_thresh = torch.where(y < threshold, torch.zeros_like(y), torch.ones_like(y))
+        return x * y_thresh.expand_as(x) #1
+        # return  y_thresh * x #2
+        # return  self.bias + y_thresh * x #3
+        # return  self.GLU(self.bias + y_thresh * x) #4
+        return  x + self.GLU(self.bias + y_thresh * x) #5
+
+def get_freq_indices(method):
+    assert method in ['top1','top2','top4','top8','top16','top32',
+                      'bot1','bot2','bot4','bot8','bot16','bot32',
+                      'low1','low2','low4','low8','low16','low32']
+    num_freq = int(method[3:])
+    if 'top' in method:
+        all_top_indices_x = [0,0,6,0,0,1,1,4,5,1,3,0,0,0,3,2,4,6,3,5,5,2,6,5,5,3,3,4,2,2,6,1]
+        all_top_indices_y = [0,1,0,5,2,0,2,0,0,6,0,4,6,3,5,2,6,3,3,3,5,1,1,2,4,2,1,1,3,0,5,3]
+        mapper_x = all_top_indices_x[:num_freq]
+        mapper_y = all_top_indices_y[:num_freq]
+    elif 'low' in method:
+        all_low_indices_x = [0,0,1,1,0,2,2,1,2,0,3,4,0,1,3,0,1,2,3,4,5,0,1,2,3,4,5,6,1,2,3,4]
+        all_low_indices_y = [0,1,0,1,2,0,1,2,2,3,0,0,4,3,1,5,4,3,2,1,0,6,5,4,3,2,1,0,6,5,4,3]
+        mapper_x = all_low_indices_x[:num_freq]
+        mapper_y = all_low_indices_y[:num_freq]
+    elif 'bot' in method:
+        all_bot_indices_x = [6,1,3,3,2,4,1,2,4,4,5,1,4,6,2,5,6,1,6,2,2,4,3,3,5,5,6,2,5,5,3,6]
+        all_bot_indices_y = [6,4,4,6,6,3,1,4,4,5,6,5,2,2,5,1,4,3,5,0,3,1,1,2,4,2,1,1,5,3,3,3]
+        mapper_x = all_bot_indices_x[:num_freq]
+        mapper_y = all_bot_indices_y[:num_freq]
+    else:
+        raise NotImplementedError
+    return mapper_x, mapper_y
+# c2wh = dict([(64, 56), (128, 28), (256, 14), (512, 7)])
+class MultiSpectralAttentionLayer(torch.nn.Module):
+    def __init__(self, channel, dct_h=7, dct_w=7, reduction = 16, freq_sel_method = 'top16'):
+        super(MultiSpectralAttentionLayer, self).__init__()
+        self.reduction = reduction
+        self.dct_h = dct_h
+        self.dct_w = dct_w
+
+        mapper_x, mapper_y = get_freq_indices(freq_sel_method)
+        self.num_split = len(mapper_x)
+        mapper_x = [temp_x * (dct_h // 7) for temp_x in mapper_x]
+        mapper_y = [temp_y * (dct_w // 7) for temp_y in mapper_y]
+        # make the frequencies in different sizes are identical to a 7x7 frequency space
+        # eg, (2,2) in 14x14 is identical to (1,1) in 7x7
+
+        self.dct_layer = MultiSpectralDCTLayer(dct_h, dct_w, mapper_x, mapper_y, channel)
+        self.fc = nn.Sequential(
+            nn.Linear(channel, channel // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        n,c,h,w = x.shape
+        x_pooled = x
+        if h != self.dct_h or w != self.dct_w:
+            x_pooled = torch.nn.functional.adaptive_avg_pool2d(x, (self.dct_h, self.dct_w))
+            # If you have concerns about one-line-change, don't worry.   :)
+            # In the ImageNet models, this line will never be triggered.
+            # This is for compatibility in instance segmentation and object detection.
+        y = self.dct_layer(x_pooled)
+
+        y = self.fc(y).view(n, c, 1, 1)
+        return x * y.expand_as(x)
+
+
+class MultiSpectralDCTLayer(nn.Module):
+    """
+    Generate dct filters
+    """
+
+    def __init__(self, height, width, mapper_x, mapper_y, channel):
+        super(MultiSpectralDCTLayer, self).__init__()
+
+        assert len(mapper_x) == len(mapper_y)
+        assert channel % len(mapper_x) == 0
+
+        self.num_freq = len(mapper_x)
+
+        # fixed DCT init
+        self.register_buffer('weight', self.get_dct_filter(height, width, mapper_x, mapper_y, channel))
+
+        # fixed random init
+        # self.register_buffer('weight', torch.rand(channel, height, width))
+
+        # learnable DCT init
+        # self.register_parameter('weight', self.get_dct_filter(height, width, mapper_x, mapper_y, channel))
+
+        # learnable random init
+        # self.register_parameter('weight', torch.rand(channel, height, width))
+
+        # num_freq, h, w
+
+    def forward(self, x):
+        assert len(x.shape) == 4, 'x must been 4 dimensions, but got ' + str(len(x.shape))
+        # n, c, h, w = x.shape
+
+        x = x * self.weight
+
+        result = torch.sum(x, dim=[2, 3])
+        return result
+
+    def build_filter(self, pos, freq, POS):
+        result = math.cos(math.pi * freq * (pos + 0.5) / POS) / math.sqrt(POS)
+        if freq == 0:
+            return result
+        else:
+            return result * math.sqrt(2)
+
+    def get_dct_filter(self, tile_size_x, tile_size_y, mapper_x, mapper_y, channel):
+        dct_filter = torch.zeros(channel, tile_size_x, tile_size_y)
+
+        c_part = channel // len(mapper_x)
+
+        for i, (u_x, v_y) in enumerate(zip(mapper_x, mapper_y)):
+            for t_x in range(tile_size_x):
+                for t_y in range(tile_size_y):
+                    dct_filter[i * c_part: (i + 1) * c_part, t_x, t_y] = self.build_filter(t_x, u_x,
+                                                                                           tile_size_x) * self.build_filter(
+                        t_y, v_y, tile_size_y)
+
+        return dct_filter
