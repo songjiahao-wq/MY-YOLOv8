@@ -5,11 +5,11 @@ if __name__ == '__main__':
     # model.train(resume=True)
 
     # 加载模型
-    model = YOLO("yolov8s-Faster.yaml")  # 从头开始构建新模型
-    model = YOLO("yolov8s.pt")  # 加载预训练模型（推荐用于训练）
+    model = YOLO("yolov8s.yaml")  # 从头开始构建新模型
+    # model = YOLO("runs/detect/NEU5/weights/best.pt")  # 加载预训练模型（推荐用于训练）
 
     # Use the model
-    results = model.train(data="coco128.yaml", epochs=20, batch=4, workers=8, close_mosaic=0)  # 训练模型
+    results = model.train(data="NEU.yaml", epochs=150, batch=32, imgsz=224, workers=8, close_mosaic=10 , name='NEU')  # 训练模型
     # results = model.val()  # 在验证集上评估模型性能
     # results = model("https://ultralytics.com/images/bus.jpg")  # 预测图像
     # success = model.export(format="onnx")  # 将模型导出为 ONNX 格式
