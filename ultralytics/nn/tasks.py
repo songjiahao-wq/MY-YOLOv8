@@ -190,7 +190,7 @@ class DetectionModel(BaseModel):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
+            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(2, ch, s, s))])  # forward
             self.stride = m.stride
             m.bias_init()  # only run once
 
@@ -467,20 +467,22 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
                  BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x,
-                 C2f_Bottleneck_ATT, C2f_Faster, SPPF_Biformer, BiLevelRoutingAttention, stem, MBConvBlock, C2f_PConv):
+                 C2f_Bottleneck_ATT, C2f_Faster, SPPF_Biformer, BiLevelRoutingAttention, stem, MBConvBlock, C2f_PConv, RFCAConv,
+                 PSA, DCNv22):
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
 
             args = [c1, c2, *args[1:]]
             if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x,
-                     C2f_Bottleneck_ATT, C2f_Faster, C2f_PConv ):
+                     C2f_Bottleneck_ATT, C2f_Faster, C2f_PConv):
                 args.insert(2, n)  # number of repeats
                 n = 1
 
         # """**************add Attention***************"""
         elif m in {GAM_Attention, SpectralAttention, SoftThresholdAttentionResidual, MultiSpectralAttentionLayer,
-                   CAMConv, CAConv, CBAMConv}:
+                   CAMConv, CAConv, CBAMConv, RFAConv, LightweightSPPFA, SPPA_CBAM, SPPFC, PSAMix, ResidualGroupConv, PSAModule_s,
+                   DyMCAConv, DyCAConv, CAConv2}:
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if not output
                 c2 = make_divisible(min(c2, max_channels) * width, 8)

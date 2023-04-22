@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn as nn
 from utils.torch_utils import profile
 from models.experimental import MixConv2d
 from models.common import Conv
