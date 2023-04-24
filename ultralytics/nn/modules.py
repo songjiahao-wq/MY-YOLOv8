@@ -14,6 +14,7 @@ from ultralytics.nn.Moudle import *
 from timm.models.layers import DropPath
 from ultralytics.nn.Moudle import *
 import torch.nn.functional as F
+from collections import OrderedDict, namedtuple
 
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     # Pad to 'same' shape outputs
@@ -223,6 +224,8 @@ class C2f(nn.Module):
         y = list(self.cv1(x).split((self.c, self.c), 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
+
+
 
 class C2f_Bottleneck_ATT(nn.Module):
     # CSP Bottleneck with 2 convolutions
@@ -1685,6 +1688,11 @@ class CAConv2(nn.Module):
         x_h = x_h1 + x_h2 + x_h3
         x_w = x_w1 + x_w2 + x_w3
 
+        # # Combine the pooling results using concatenation
+        # x_h = torch.cat([x_h1, F.interpolate(x_h2, size=(h, 1), mode='nearest'),
+        #                  F.interpolate(x_h3, size=(h, 1), mode='nearest')], dim=1)
+        # x_w = torch.cat([x_w1, F.interpolate(x_w2, size=(1, w), mode='nearest'),
+        #                  F.interpolate(x_w3, size=(1, w), mode='nearest')], dim=1)
         y = torch.cat([x_h, x_w], dim=2) #n,c,2h,1
         y = self.conv1(y)  #n,c/16,2h,1
         y = self.bn1(y)
@@ -1699,7 +1707,95 @@ class CAConv2(nn.Module):
         out = identity * a_w * a_h
 
         return self.conv(out)
+class SKConv(nn.Module):
+
+    def __init__(self, channel=512, c2=512 ,kernel_size=3,stride=2, kernels=[1,3,5,7],reduction=32,group=16,L=32):
+        super().__init__()
+        inp =channel
+        group = channel
+        oup = c2
+        self.d=max(L,channel//reduction)
+        self.convs=nn.ModuleList([])
+        for k in kernels:
+            self.convs.append(
+                nn.Sequential(OrderedDict([
+                    ('conv',nn.Conv2d(channel,channel,kernel_size=k,padding=k//2,groups=group)),
+                    ('bn',nn.BatchNorm2d(channel)),
+                    ('relu',nn.ReLU()),
+                ]))
+            )
+        self.fc=nn.Linear(channel * 21 ,self.d)
+        self.fcs=nn.ModuleList([])
+        for i in range(len(kernels)):
+            self.fcs.append(nn.Linear(self.d,channel))
+        self.softmax=nn.Softmax(dim=0)
+        self.avg_pool1 =    nn.AdaptiveAvgPool2d(1)
+        self.avg_pool2 =    nn.AdaptiveAvgPool2d(2)
+        self.avg_pool4 =    nn.AdaptiveAvgPool2d(4)
+        self.conv = nn.Sequential(nn.Conv2d(inp, oup, kernel_size, padding=kernel_size // 2, stride=stride),
+                                  nn.BatchNorm2d(oup),
+                                  nn.ReLU())
+    def forward(self, x):
+        bs, c, _, _ = x.size()
+        conv_outs=[]
+        ### split
+        for conv in self.convs:
+            conv_outs.append(conv(x))
+        feats=torch.stack(conv_outs,0)#k,bs,channel,h,w
+
+        ### fuse
+        U=sum(conv_outs) #bs,c,h,w
+
+        y1 = self.avg_pool1(x).reshape((bs, -1))
+        y2 = self.avg_pool2(x).reshape((bs, -1))
+        y3 = self.avg_pool4(x).reshape((bs, -1))
+        S = torch.cat((y1, y2, y3), 1)
+        ### reduction channel
+        # S=U.mean(-1).mean(-1) #bs,c
+        Z=self.fc(S) #bs,d
+
+        ### calculate attention weight
+        weights=[]
+        for fc in self.fcs:
+            weight=fc(Z)
+            weights.append(weight.view(bs,c,1,1)) #bs,channel
+        attention_weughts=torch.stack(weights,0)#k,bs,channel,1,1
+        attention_weughts=self.softmax(attention_weughts)#k,bs,channel,1,1
+
+        ### fuse
+        V=(attention_weughts*feats).sum(0)
+        V = self.conv(V)
+        return V
 #RFA exp start********************************
+class C2f_Res2(nn.Module):
+    # CSP Bottleneck with 2 convolutions
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(Bottleneck(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
+
+    def forward(self, x):
+        y = list(self.cv1(x).chunk(2, 1))
+        for i in range(len(self.m)):
+            if i ==0:
+                sp = y[-1]
+            else:
+                sp = y[-1] + sp
+            if i ==0:
+                out = self.m[i](sp)
+            else:
+                out = torch.cat((out, sp), 1)
+                out = self.m[i](out)
+        y.append(out)
+        return self.cv2(torch.cat(y, 1))
+
+    def forward_split(self, x):
+        y = list(self.cv1(x).split((self.c, self.c), 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
 #PSA激活自注意力 exp start********************************
 class PSA_Channel(nn.Module):
     def __init__(self, c1) -> None:
