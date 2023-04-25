@@ -9,7 +9,7 @@ if __name__ == '__main__':
     # model = YOLO("runs/detect/v5n9/weights/best.pt")  # 加载预训练模型（推荐用于训练）
 
     # Use the model
-    results = model.train(data="VOC_five.yaml", epochs=100, batch=16, imgsz=640, workers=8, close_mosaic=0 , name='8s_CAConv2')  # 训练模型
+    results = model.train(data="VOC_five.yaml", epochs=100, batch=16, imgsz=640, workers=8, close_mosaic=0 , name='8s_SKConv_dfl1.2')  # 训练模型
     # results = model.val()  # 在验证集上评估模型性能
     # results = model("https://ultralytics.com/images/bus.jpg")  # 预测图像
     # success = model.export(format="onnx")  # 将模型导出为 ONNX 格式
