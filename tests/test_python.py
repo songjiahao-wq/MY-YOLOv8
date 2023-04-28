@@ -1,4 +1,4 @@
-# Ultralytics YOLO 🚀, GPL-3.0 license
+# Ultralytics YOLO 🚀, AGPL-3.0 license
 
 from pathlib import Path
 
@@ -185,7 +185,7 @@ def test_workflow():
 def test_predict_callback_and_setup():
     # test callback addition for prediction
     def on_predict_batch_end(predictor):  # results -> List[batch_size]
-        path, _, im0s, _, _ = predictor.batch
+        path, im0s, _, _ = predictor.batch
         # print('on_predict_batch_end', im0s[0].shape)
         im0s = im0s if isinstance(im0s, list) else [im0s]
         bs = [predictor.dataset.bs for _ in range(len(path))]
@@ -194,7 +194,7 @@ def test_predict_callback_and_setup():
     model = YOLO(MODEL)
     model.add_callback('on_predict_batch_end', on_predict_batch_end)
 
-    dataset = load_inference_source(source=SOURCE, transforms=model.transforms)
+    dataset = load_inference_source(source=SOURCE)
     bs = dataset.bs  # noqa access predictor properties
     results = model.predict(dataset, stream=True)  # source already setup
     for _, (result, im0, bs) in enumerate(results):
@@ -217,7 +217,7 @@ def test_result():
     res[0].plot(conf=True, boxes=False, masks=True)
     res[0].plot(pil=True)
     res[0] = res[0].cpu().numpy()
-    print(res[0].path, res[0].masks.masks)
+    print(res[0].path, res[0].masks.data)
 
     model = YOLO('yolov8n.pt')
     res = model(SOURCE)

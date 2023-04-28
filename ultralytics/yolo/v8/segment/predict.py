@@ -1,4 +1,4 @@
-# Ultralytics YOLO 🚀, GPL-3.0 license
+# Ultralytics YOLO 🚀, AGPL-3.0 license
 
 import torch
 
@@ -9,8 +9,12 @@ from ultralytics.yolo.v8.detect.predict import DetectionPredictor
 
 class SegmentationPredictor(DetectionPredictor):
 
+    def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
+        super().__init__(cfg, overrides, _callbacks)
+        self.args.task = 'segment'
+
     def postprocess(self, preds, img, orig_imgs):
-        # TODO: filter by classes
+        """TODO: filter by classes."""
         p = ops.non_max_suppression(preds[0],
                                     self.args.conf,
                                     self.args.iou,
@@ -22,7 +26,7 @@ class SegmentationPredictor(DetectionPredictor):
         proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]  # second output is len 3 if pt, but only 1 if exported
         for i, pred in enumerate(p):
             orig_img = orig_imgs[i] if isinstance(orig_imgs, list) else orig_imgs
-            path, _, _, _, _ = self.batch
+            path = self.batch[0]
             img_path = path[i] if isinstance(path, list) else path
             if not len(pred):  # save empty boxes
                 results.append(Results(orig_img=orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6]))
@@ -41,6 +45,7 @@ class SegmentationPredictor(DetectionPredictor):
 
 
 def predict(cfg=DEFAULT_CFG, use_python=False):
+    """Runs YOLO object detection on an image or video source."""
     model = cfg.model or 'yolov8n-seg.pt'
     source = cfg.source if cfg.source is not None else ROOT / 'assets' if (ROOT / 'assets').exists() \
         else 'https://ultralytics.com/images/bus.jpg'
