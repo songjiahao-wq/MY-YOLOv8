@@ -25,25 +25,41 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
     return p
 
 
+# class Conv(nn.Module):
+#     """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
+#     default_act = nn.SiLU()  # default activation
+#
+#     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+#         """Initialize Conv layer with given arguments including activation."""
+#         super().__init__()
+#         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+#         self.bn = nn.BatchNorm2d(c2)
+#         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+#
+#     def forward(self, x):
+#         """Apply convolution, batch normalization and activation to input tensor."""
+#         return self.act(self.bn(self.conv(x)))
+#
+#     def forward_fuse(self, x):
+#         """Perform transposed convolution of 2D data."""
+#         return self.act(self.conv(x))
 class Conv(nn.Module):
-    """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
-    default_act = nn.SiLU()  # default activation
+    default_act = nn.SiLU()
 
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
-        """Initialize Conv layer with given arguments including activation."""
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True, custom_conv=None):
         super().__init__()
-        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        if custom_conv is None:
+            self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        else:
+            self.conv = custom_conv(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d)
         self.bn = nn.BatchNorm2d(c2)
         self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
 
     def forward(self, x):
-        """Apply convolution, batch normalization and activation to input tensor."""
         return self.act(self.bn(self.conv(x)))
 
     def forward_fuse(self, x):
-        """Perform transposed convolution of 2D data."""
         return self.act(self.conv(x))
-
 
 class DWConv(Conv):
     """Depth-wise convolution."""
@@ -1056,8 +1072,8 @@ class PConv(nn.Module):
         x = self.conv(x)
         return x
 #Faster_Block end********************************
-# -------------------------------------------------------------------------
-# EfficientNetLite
+
+# EfficientNetLite************************************
 class drop_connect:
     def __init__(self, drop_connect_rate):
         self.drop_connect_rate = drop_connect_rate
@@ -1150,7 +1166,116 @@ class MBConvBlock(nn.Module):
                 x = self.drop_connect(x, training=self.training)
             x += identity  # skip connection
         return x
-# -------------------------------------------------------------------------
+# Efficient V2-------------------------------------------------------------------------
+class SqueezeExcite_efficientv2(nn.Module):
+    def __init__(self, c1, c2, se_ratio=0.25, act_layer=nn.ReLU):
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.gate_fn = nn.Sigmoid()
+        reduced_chs = int(c1 * se_ratio)
+        self.conv_reduce = nn.Conv2d(c2, reduced_chs, 1, bias=True)
+        self.act1 = act_layer(inplace=True)
+        self.conv_expand = nn.Conv2d(reduced_chs, c2, 1, bias=True)
+
+    def forward(self, x):
+        x_se = self.avg_pool(x)
+        x_se = self.conv_reduce(x_se)
+        x_se = self.act1(x_se)
+        x_se = self.conv_expand(x_se)
+        x_se = self.gate_fn(x_se)
+        x = x * (x_se.expand_as(x))
+        return x
+class stemV2(nn.Module):
+    def __init__(self, c1, c2, kernel_size=3, stride=1, groups=1):
+        super().__init__()
+
+        self.conv = nn.Conv2d(c1, c2, kernel_size, stride, padding=(kernel_size - 1) // 2, groups=groups, bias=False)
+        self.bn = nn.BatchNorm2d(c2, eps=1e-3, momentum=0.1)
+        self.act = nn.SiLU(inplace=True)
+
+    def forward(self, x):
+        # print(x.shape)
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.act(x)
+        return x
+class FusedMBConv(nn.Module):
+    def __init__(self, c1, c2, k=3, s=1, expansion=1, drop_connect_rate=0.2, has_se=0):
+        super().__init__()
+        self.has_se =has_se
+        assert s in [1, 2]
+
+        self.has_shortcut = (s == 1 and c1 == c2)
+        expanded_c = c1 * expansion
+        self.has_expansion = expansion>1
+        if self.has_expansion:
+            self.expansion_conv = stemV2(c1, expanded_c, kernel_size=k, stride=s)
+            self.project_conv = stemV2(expanded_c, c2, kernel_size=1, stride=1)
+
+        else:
+            self.project_conv = stemV2(c1, c2, kernel_size=k, stride=s)
+
+        self.drop_connect_rate = drop_connect_rate
+        if self.has_shortcut and drop_connect_rate > 0:
+            self.dropout = DropPath(drop_connect_rate)
+        # Squeeze and Excitation layer, if desired
+        if self.has_se:
+            # num_squeezed_channels = max(1, int(c1 * se_ratio))
+            self.se = SeBlock(c1, 4)
+            # self.se = CA(c1,c1, 4)
+    def forward(self, x):
+        if self.has_expansion:
+            result = self.expansion_conv(x)
+            result = self.project_conv(result)
+        else:
+            result = self.project_conv(x)
+
+        if self.has_shortcut:
+            if self.drop_connect_rate > 0:
+                result = self.dropout(result)
+        # Squeeze and Excitation
+        if self.has_se:
+            x = self.se(x)
+            result += x
+
+        return result
+class MBConv(nn.Module):
+    def __init__(self, c1, c2, k=3, s=1, expansion=1, se_ration=0, dropout_rate=0.2, drop_connect_rate=0.2):
+        super().__init__()
+
+        assert s in [1, 2]
+
+        self.has_shortcut = (s == 1 and c1 == c2)
+        # print(c1, c2, k, s, expansion)
+
+        expanded_c = c1 * expansion
+        self.expansion_conv = stemV2(c1, expanded_c, kernel_size=1)
+        self.dw_conv = stemV2(expanded_c, expanded_c, kernel_size=k, stride=s, groups=expanded_c)
+
+        self.se = SqueezeExcite_efficientv2(c1, expanded_c, se_ration) if se_ration > 0 else nn.Identity()
+
+        self.project_conv = stemV2(expanded_c, c2, kernel_size=1, stride=1)
+
+        self.drop_connect_rate = drop_connect_rate
+        if self.has_shortcut and drop_connect_rate > 0:
+            self.dropout = DropPath(drop_connect_rate)
+
+    def forward(self, x):
+
+        # print(x.shape)
+        result = self.expansion_conv(x)
+        result = self.dw_conv(result)
+
+        result = self.se(result)
+        result = self.project_conv(result)
+
+        if self.has_shortcut:
+            if self.drop_connect_rate > 0:
+                result = self.dropout(result)
+
+            result += x
+
+        return result
 # SE-Net Adaptive avg pooling --> fc --> fc --> Sigmoid
 class SeBlock(nn.Module):
     def __init__(self, in_channel, reduction=4):
@@ -1375,16 +1500,44 @@ class Bottleneck_PConv(nn.Module):
         self.cv1 = Conv(c1, c_, k[0], 1) #可改PConv
         self.cv2 = PConv(c_, c2, 4)
         self.add = shortcut and c1 == c2
-
     def forward(self, x):
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+
 class C2f_PConv(C2f):
     def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
         super().__init__(c1, c2, n, shortcut, g, e)
         self.c = int(c2 * e)  # hidden channels
         self.m = nn.ModuleList(Bottleneck_PConv(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
-
-
+class Bottleneck_ODConv(nn.Module):
+    # Standard bottleneck
+    def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5):  # ch_in, ch_out, shortcut, groups, kernels, expand
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, k[0], 1, custom_conv=ODConv2d)
+        self.cv2 = Conv(c_, c2, k[1], 1, g=g, custom_conv=ODConv2d)
+        self.add = shortcut and c1 == c2
+    def forward(self, x):
+        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+class C2f_ODConv(C2f):
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.c = int(c2 * e)  # hidden channels
+        self.m = nn.ModuleList(Bottleneck_ODConv(self.c, self.c, shortcut, g, k=(3, 3), e=1.0) for _ in range(n))
+class Bottleneck_CondConv(nn.Module):
+    # Standard bottleneck
+    def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5):  # ch_in, ch_out, shortcut, groups, kernels, expand
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, k[0], 1, custom_conv=ODConv2d)
+        self.cv2 = Conv(c_, c2, k[1], 1, g=g, custom_conv=ODConv2d)
+        self.add = shortcut and c1 == c2
+    def forward(self, x):
+        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+class C2f_CondConv(C2f):
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.c = int(c2 * e)  # hidden channels
+        self.m = nn.ModuleList(Bottleneck_ODConv(self.c, self.c, shortcut, g, k=(3, 3), e=1.0) for _ in range(n))
 #RFA exp start********************************
 class h_sigmoid(nn.Module):
     def __init__(self, inplace=True):
@@ -1893,11 +2046,11 @@ class C2f_Res2(nn.Module):
     def forward(self, x):
         y = list(self.cv1(x).chunk(2, 1))
         for i in range(len(self.m)):
-            if i ==0:
+            if i == 0:
                 sp = y[-1]
             else:
                 sp = y[-1] + sp
-            if i ==0:
+            if i == 0:
                 out = self.m[i](sp)
             else:
                 out = torch.cat((out, sp), 1)
