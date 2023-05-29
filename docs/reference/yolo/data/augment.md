@@ -1,3 +1,7 @@
+---
+description: Use Ultralytics YOLO Data Augmentation transforms with Base, MixUp, and Albumentations for object detection and classification.
+---
+
 # BaseTransform
 ---
 :::ultralytics.yolo.data.augment.BaseTransform
@@ -81,6 +85,11 @@
 # classify_transforms
 ---
 :::ultralytics.yolo.data.augment.classify_transforms
+<br><br>
+
+# hsv2colorjitter
+---
+:::ultralytics.yolo.data.augment.hsv2colorjitter
 <br><br>
 
 # classify_albumentations

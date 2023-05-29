@@ -1,3 +1,8 @@
+---
+comments: true
+description: Learn how to train custom YOLOv8 models on various datasets, configure hyperparameters, and use Ultralytics' YOLO for seamless training.
+---
+
 <img width="1024" src="https://github.com/ultralytics/assets/raw/main/yolov8/banner-integrations.png">
 
 **Train mode** is used for training a YOLOv8 model on a custom dataset. In this mode, the model is trained using the
@@ -77,6 +82,8 @@ task.
 | `close_mosaic`    | `0`      | (int) disable mosaic augmentation for final epochs                          |
 | `resume`          | `False`  | resume training from last checkpoint                                        |
 | `amp`             | `True`   | Automatic Mixed Precision (AMP) training, choices=[True, False]             |
+| `fraction`        | `1.0`    | dataset fraction to train on (default is 1.0, all images in train set)      |
+| `profile`         | `False`  | profile ONNX and TensorRT speeds during training for loggers                |
 | `lr0`             | `0.01`   | initial learning rate (i.e. SGD=1E-2, Adam=1E-3)                            |
 | `lrf`             | `0.01`   | final learning rate (lr0 * lrf)                                             |
 | `momentum`        | `0.937`  | SGD momentum/Adam beta1                                                     |

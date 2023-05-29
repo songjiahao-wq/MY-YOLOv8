@@ -1,3 +1,8 @@
+---
+comments: true
+description: Learn how to use YOLOv8 from the Command Line Interface (CLI) through simple, single-line commands with `yolo` without Python code.
+---
+
 # Command Line Interface Usage
 
 The YOLO command line interface (CLI) allows for simple single-line commands without the need for a Python environment.

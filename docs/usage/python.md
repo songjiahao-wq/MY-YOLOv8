@@ -1,3 +1,8 @@
+---
+comments: true
+description: Integrate YOLOv8 in Python. Load, use pretrained models, train, and infer images. Export to ONNX. Track objects in videos.
+---
+
 # Python Usage
 
 Welcome to the YOLOv8 Python Usage documentation! This guide is designed to help you seamlessly integrate YOLOv8 into

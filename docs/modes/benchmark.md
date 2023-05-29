@@ -1,3 +1,8 @@
+---
+comments: true
+description: Benchmark mode compares speed and accuracy of various YOLOv8 export formats like ONNX or OpenVINO. Optimize formats for speed or accuracy.
+---
+
 <img width="1024" src="https://github.com/ultralytics/assets/raw/main/yolov8/banner-integrations.png">
 
 **Benchmark mode** is used to profile the speed and accuracy of various export formats for YOLOv8. The benchmarks

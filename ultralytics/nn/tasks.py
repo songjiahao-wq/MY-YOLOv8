@@ -8,14 +8,21 @@ import thop
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import (C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x, Classify,
-                                    Concat, Conv, ConvTranspose, Detect, DWConv, DWConvTranspose2d, Ensemble, Focus,
-                                    GhostBottleneck, GhostConv, Pose, Segment, GGhostRegNet, GHOSTBottleneck, C2f_Bottleneck_ATT,
-                                    C2f_Faster)
+from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x,
+                                    Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
+                                    Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
+                                    RTDETRDecoder, Segment)
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_requirements, check_suffix, check_yaml
+from ultralytics.yolo.utils.plotting import feature_visualization
 from ultralytics.yolo.utils.torch_utils import (fuse_conv_and_bn, fuse_deconv_and_bn, initialize_weights,
                                                 intersect_dicts, make_divisible, model_info, scale_img, time_sync)
+
+try:
+    import thop
+except ImportError:
+    thop = None
+
 from ultralytics.nn.Moudle import *
 from ultralytics.nn.modules import *
 
@@ -61,8 +68,8 @@ class BaseModel(nn.Module):
             x = m(x)  # run
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
-                LOGGER.info('visualize feature not yet supported')
-                # TODO: feature_visualization(x, m.type, m.i, save_dir=visualize)
+                LOGGER.info('visualize feature ')
+                feature_visualization(x, m.type, m.i, save_dir=visualize)
         return x
 
     def _profile_one_layer(self, m, x, dt):
@@ -100,13 +107,18 @@ class BaseModel(nn.Module):
         """
         if not self.is_fused():
             for m in self.model.modules():
-                if isinstance(m, (Conv, DWConv)) and hasattr(m, 'bn'):
+                if isinstance(m, (Conv, Conv2, DWConv)) and hasattr(m, 'bn'):
+                    if isinstance(m, Conv2):
+                        m.fuse_convs()
                     m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
                     delattr(m, 'bn')  # remove batchnorm
                     m.forward = m.forward_fuse  # update forward
                 if isinstance(m, ConvTranspose) and hasattr(m, 'bn'):
                     m.conv_transpose = fuse_deconv_and_bn(m.conv_transpose, m.bn)
                     delattr(m, 'bn')  # remove batchnorm
+                    m.forward = m.forward_fuse  # update forward
+                if isinstance(m, RepConv):
+                    m.fuse_convs()
                     m.forward = m.forward_fuse  # update forward
             self.info(verbose=verbose)
 
@@ -125,7 +137,7 @@ class BaseModel(nn.Module):
         bn = tuple(v for k, v in nn.__dict__.items() if 'Norm' in k)  # normalization layers, i.e. BatchNorm2d()
         return sum(isinstance(v, bn) for v in self.modules()) < thresh  # True if < 'thresh' BatchNorm layers in model
 
-    def info(self, verbose=True, imgsz=640):
+    def info(self, detailed=False, verbose=True, imgsz=640):
         """
         Prints model information
 
@@ -133,7 +145,7 @@ class BaseModel(nn.Module):
             verbose (bool): if True, prints out the model information. Defaults to False
             imgsz (int): the size of the image that the model will be trained on. Defaults to 640
         """
-        model_info(self, verbose=verbose, imgsz=imgsz)
+        return model_info(self, detailed=detailed, verbose=verbose, imgsz=imgsz)
 
     def _apply(self, fn):
         """
@@ -191,7 +203,7 @@ class DetectionModel(BaseModel):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(2, ch, s, s))])  # forward
+            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
             self.stride = m.stride
             m.bias_init()  # only run once
 
@@ -337,6 +349,22 @@ class ClassificationModel(BaseModel):
                     m[i] = nn.Conv2d(m[i].in_channels, nc, m[i].kernel_size, m[i].stride, bias=m[i].bias is not None)
 
 
+class Ensemble(nn.ModuleList):
+    """Ensemble of models."""
+
+    def __init__(self):
+        """Initialize an ensemble of models."""
+        super().__init__()
+
+    def forward(self, x, augment=False, profile=False, visualize=False):
+        """Function generates the YOLOv5 network's final layer."""
+        y = [module(x, augment, profile, visualize)[0] for module in self]
+        # y = torch.stack(y).max(0)[0]  # max ensemble
+        # y = torch.stack(y).mean(0)  # mean ensemble
+        y = torch.cat(y, 2)  # nms ensemble, y shape(B, HW, C)
+        return y, None  # inference, train output
+
+
 # Functions ------------------------------------------------------------------------------------------------------------
 
 
@@ -418,7 +446,7 @@ def attempt_load_weights(weights, device=None, inplace=True, fuse=False):
 def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     """Loads a single model weights."""
     ckpt, weight = torch_safe_load(weight)  # load ckpt
-    args = {**DEFAULT_CFG_DICT, **ckpt['train_args']}  # combine model and default args, preferring model args
+    args = {**DEFAULT_CFG_DICT, **(ckpt.get('train_args', {}))}  # combine model and default args, preferring model args
     model = (ckpt.get('ema') or ckpt['model']).to(device).float()  # FP32 model
 
     # Model compatibility updates
@@ -476,7 +504,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
 
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
-                 BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x,
+                 BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3,
                  C2f_Bottleneck_ATT, C2f_Faster, SPPF_Biformer, BiLevelRoutingAttention, stem, MBConvBlock, FusedMBConv, MBConv, C2f_PConv, RFCAConv,
                  PSA, DCNv22, C2f_Res2, C2f_ODConv):
             c1, c2 = ch[f], args[0]
@@ -484,10 +512,19 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
 
             args = [c1, c2, *args[1:]]
-            if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x,
+            if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x, RepC3,
                      C2f_Bottleneck_ATT, C2f_Faster, C2f_PConv, C2f_ODConv):
                 args.insert(2, n)  # number of repeats
                 n = 1
+        elif m is AIFI:
+            args = [ch[f], *args]
+        elif m in (HGStem, HGBlock):
+            c1, cm, c2 = ch[f], args[0], args[1]
+            args = [c1, cm, c2, *args[2:]]
+            if m is HGBlock:
+                args.insert(4, n)  # number of repeats
+                n = 1
+
 
         # """**************add Attention***************"""
         elif m in {GAM_Attention, SpectralAttention, SoftThresholdAttentionResidual, MultiSpectralAttentionLayer,
@@ -516,7 +553,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in (Detect, Segment, Pose):
+        elif m in (Detect, Segment, Pose, RTDETRDecoder):
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
@@ -547,7 +584,7 @@ def yaml_model_load(path):
         LOGGER.warning(f'WARNING ⚠️ Ultralytics YOLO P6 models now use -p6 suffix. Renaming {path.stem} to {new_stem}.')
         path = path.with_stem(new_stem)
 
-    unified_path = re.sub(r'(\d+)([nslmx])(.+)?$', r'\1\3', str(path))  # i.e. yolov8x.yaml -> yolov8-SPPCSPC.yaml
+    unified_path = re.sub(r'(\d+)([nslmx])(.+)?$', r'\1\3', str(path))  # i.e. yolov8x.yaml -> yolov8.yaml
     yaml_file = check_yaml(unified_path, hard=False) or check_yaml(path)
     d = yaml_load(yaml_file)  # model dict
     d['scale'] = guess_model_scale(path)

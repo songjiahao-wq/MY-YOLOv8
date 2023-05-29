@@ -1,3 +1,5 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+
 import contextlib
 import math
 import re
@@ -102,7 +104,8 @@ def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None):
     """
     if ratio_pad is None:  # calculate from img0_shape
         gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
-        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+        pad = round((img1_shape[1] - img0_shape[1] * gain) / 2 - 0.1), round(
+            (img1_shape[0] - img0_shape[0] * gain) / 2 - 0.1)  # wh padding
     else:
         gain = ratio_pad[0][0]
         pad = ratio_pad[1]
@@ -148,7 +151,7 @@ def non_max_suppression(
     Perform non-maximum suppression (NMS) on a set of boxes, with support for masks and multiple labels per box.
 
     Arguments:
-        prediction (torch.Tensor): A tensor of shape (batch_size, num_boxes, num_classes + 4 + num_masks)
+        prediction (torch.Tensor): A tensor of shape (batch_size, num_classes + 4 + num_masks, num_boxes)
             containing the predicted boxes, classes, and masks. The tensor should be in the format
             output by a model, such as YOLO.
         conf_thres (float): The confidence threshold below which boxes will be filtered out.

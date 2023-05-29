@@ -2,6 +2,7 @@
 
 from ultralytics.yolo.cfg import get_cfg
 
+from ...yolo.utils.torch_utils import model_info
 from .build import build_sam
 from .predict import Predictor
 
@@ -9,7 +10,7 @@ from .predict import Predictor
 class SAM:
 
     def __init__(self, model='sam_b.pt') -> None:
-        if model and not (model.endswith('.pt') or model.endswith('.pth')):
+        if model and not model.endswith('.pt') and not model.endswith('.pth'):
             # Should raise AssertionError instead?
             raise NotImplementedError('Segment anything prediction requires pre-trained checkpoint')
         self.model = build_sam(model)
@@ -33,3 +34,13 @@ class SAM:
     def val(self, **kwargs):
         """Run validation given dataset."""
         raise NotImplementedError("SAM models don't support validation")
+
+    def info(self, detailed=False, verbose=True):
+        """
+        Logs model info.
+
+        Args:
+            detailed (bool): Show detailed information about model.
+            verbose (bool): Controls verbosity.
+        """
+        return model_info(self.model, detailed=detailed, verbose=verbose)

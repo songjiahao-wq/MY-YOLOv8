@@ -8,7 +8,6 @@ import platform
 import re
 import subprocess
 import sys
-import tempfile
 import threading
 import urllib
 import uuid
@@ -165,7 +164,7 @@ class IterableSimpleNamespace(SimpleNamespace):
         return getattr(self, key, default)
 
 
-def plt_settings(rcparams={'font.size': 11}, backend='Agg'):
+def plt_settings(rcparams=None, backend='Agg'):
     """
     Decorator to temporarily set rc parameters and the backend for a plotting function.
 
@@ -180,6 +179,9 @@ def plt_settings(rcparams={'font.size': 11}, backend='Agg'):
     Returns:
         callable: Decorated function with temporarily set rc parameters and backend.
     """
+
+    if rcparams is None:
+        rcparams = {'font.size': 11}
 
     def decorator(func):
         """Decorator to apply temporary rc parameters and backend to a function."""
@@ -249,23 +251,26 @@ def yaml_save(file='data.yaml', data=None):
 
     Args:
         file (str, optional): File name. Default is 'data.yaml'.
-        data (dict, optional): Data to save in YAML format. Default is None.
+        data (dict): Data to save in YAML format.
 
     Returns:
         None: Data is saved to the specified file.
     """
+    if data is None:
+        data = {}
     file = Path(file)
     if not file.parent.exists():
         # Create parent directories if they don't exist
         file.parent.mkdir(parents=True, exist_ok=True)
 
+    # Convert Path objects to strings
+    for k, v in data.items():
+        if isinstance(v, Path):
+            data[k] = str(v)
+
+    # Dump data to file in YAML format
     with open(file, 'w') as f:
-        # Dump data to file in YAML format, converting Path objects to strings
-        yaml.safe_dump({k: str(v) if isinstance(v, Path) else v
-                        for k, v in data.items()},
-                       f,
-                       sort_keys=False,
-                       allow_unicode=True)
+        yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
 
 
 def yaml_load(file='data.yaml', append_filename=False):
@@ -372,12 +377,15 @@ def is_online() -> bool:
     """
     import socket
 
-    for server in '1.1.1.1', '8.8.8.8', '223.5.5.5':  # Cloudflare, Google, AliDNS:
+    for host in '1.1.1.1', '8.8.8.8', '223.5.5.5':  # Cloudflare, Google, AliDNS:
         try:
-            socket.create_connection((server, 53), timeout=2)  # connect to (server, port=53)
-            return True
+            test_connection = socket.create_connection(address=(host, 53), timeout=2)
         except (socket.timeout, socket.gaierror, OSError):
             continue
+        else:
+            # If the connection was successful, close it to avoid a ResourceWarning
+            test_connection.close()
+            return True
     return False
 
 
@@ -413,12 +421,7 @@ def is_dir_writeable(dir_path: Union[str, Path]) -> bool:
     Returns:
         bool: True if the directory is writeable, False otherwise.
     """
-    try:
-        with tempfile.TemporaryFile(dir=dir_path):
-            pass
-        return True
-    except OSError:
-        return False
+    return os.access(str(dir_path), os.W_OK)
 
 
 def is_pytest_running():
@@ -605,10 +608,11 @@ def threaded(func):
 
 def set_sentry():
     """
-    Initialize the Sentry SDK for error tracking and reporting. Enabled when sync=True in settings and
-    disabled when sync=False. Run 'yolo settings' to see and update settings YAML file.
+    Initialize the Sentry SDK for error tracking and reporting. Only used if sentry_sdk package is installed and
+    sync=True in settings. Run 'yolo settings' to see and update settings YAML file.
 
-    Conditions required to send errors:
+    Conditions required to send errors (ALL conditions must be met or no errors will be reported):
+        - sentry_sdk package is installed
         - sync=True in YOLO settings
         - pytest is not running
         - running in a pip package installation
@@ -655,7 +659,12 @@ def set_sentry():
             is_pip_package() and \
             not is_git_dir():
 
-        import sentry_sdk  # noqa
+        # If sentry_sdk package is not installed then return and do not use Sentry
+        try:
+            import sentry_sdk  # noqa
+        except ImportError:
+            return
+
         sentry_sdk.init(
             dsn='https://5ff1556b71594bfea135ff0203a0d290@o4504521589325824.ingest.sentry.io/4504521592406016',
             debug=False,
@@ -759,25 +768,9 @@ ENVIRONMENT = 'Colab' if is_colab() else 'Kaggle' if is_kaggle() else 'Jupyter' 
 TESTS_RUNNING = is_pytest_running() or is_github_actions_ci()
 set_sentry()
 
-# OpenCV Multilanguage-friendly functions ------------------------------------------------------------------------------------
-imshow_ = cv2.imshow  # copy to avoid recursion errors
+# Apply monkey patches if the script is being run from within the parent directory of the script's location
+from .patches import imread, imshow, imwrite
 
-
-def imread(filename, flags=cv2.IMREAD_COLOR):
-    return cv2.imdecode(np.fromfile(filename, np.uint8), flags)
-
-
-def imwrite(filename, img):
-    try:
-        cv2.imencode(Path(filename).suffix, img)[1].tofile(filename)
-        return True
-    except Exception:
-        return False
-
-
-def imshow(path, im):
-    imshow_(path.encode('unicode_escape').decode(), im)
-
-
+# torch.save = torch_save
 if Path(inspect.stack()[0].filename).parent.parent.as_posix() in inspect.stack()[-1].filename:
-    cv2.imread, cv2.imwrite, cv2.imshow = imread, imwrite, imshow  # redefine
+    cv2.imread, cv2.imwrite, cv2.imshow = imread, imwrite, imshow

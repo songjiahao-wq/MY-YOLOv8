@@ -1,3 +1,8 @@
+---
+comments: true
+description: Learn how to leverage callbacks in Ultralytics YOLO framework to perform custom tasks in trainer, validator, predictor and exporter modes.
+---
+
 ## Callbacks
 
 Ultralytics framework supports callbacks as entry points in strategic stages of train, val, export, and predict modes.
@@ -13,7 +18,7 @@ In this example, we want to return the original frame with each result object. H
 ```python
 def on_predict_batch_end(predictor):
     # Retrieve the batch data
-    _, _, im0s, _, _ = predictor.batch
+    _, im0s, _, _ = predictor.batch
     
     # Ensure that im0s is a list
     im0s = im0s if isinstance(im0s, list) else [im0s]
@@ -36,7 +41,6 @@ for (result, frame) in model.track/predict():
 
 Here are all supported callbacks. See callbacks [source code](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/yolo/utils/callbacks/base.py) for additional details.
 
-
 ### Trainer Callbacks
 
 | Callback                    | Description                                             |
@@ -56,7 +60,6 @@ Here are all supported callbacks. See callbacks [source code](https://github.com
 | `on_params_update`          | Triggered when model parameters are updated             |
 | `teardown`                  | Triggered when the training process is being cleaned up |
 
-
 ### Validator Callbacks
 
 | Callback             | Description                                     |
@@ -65,7 +68,6 @@ Here are all supported callbacks. See callbacks [source code](https://github.com
 | `on_val_batch_start` | Triggered at the start of each validation batch |
 | `on_val_batch_end`   | Triggered at the end of each validation batch   |
 | `on_val_end`         | Triggered when the validation ends              |
-
 
 ### Predictor Callbacks
 
