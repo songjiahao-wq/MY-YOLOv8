@@ -246,7 +246,7 @@ def _cfg(url='', **kwargs):
 
 
 default_cfgs = {
-    # patch models
+    # patch add_models
     'Deepvit_base_patch16_224_16B': _cfg(
         url='',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
@@ -275,7 +275,7 @@ class DeepVisionTransformer(nn.Module):
                  use_cnn_embed=False, apply_transform=None, transform_scale=False, scale_adjustment=1.):
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other add_models
         # use cosine similarity as a regularization term
         self.cos_reg = cos_reg
 

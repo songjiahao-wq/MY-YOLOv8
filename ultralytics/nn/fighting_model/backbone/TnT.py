@@ -203,7 +203,7 @@ class TNT(nn.Module):
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm, inner_stride=4, se=0):
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.outer_dim = outer_dim  # num_features for consistency with other models
+        self.num_features = self.outer_dim = outer_dim  # num_features for consistency with other add_models
 
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, outer_dim=outer_dim,

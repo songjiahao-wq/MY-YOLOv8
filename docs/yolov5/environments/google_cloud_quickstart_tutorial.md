@@ -42,7 +42,7 @@ You can now train, test, detect, and export YOLOv5 models on your VM:
 python train.py  # train a model
 python val.py --weights yolov5s.pt  # validate a model for Precision, Recall, and mAP
 python detect.py --weights yolov5s.pt --source path/to/images  # run inference on images and videos
-python export.py --weights yolov5s.pt --include onnx coreml tflite  # export models to other formats
+python export.py --weights yolov5s.pt --include onnx coreml tflite  # export add_models to other formats
 ```
 
 <img width="1000" alt="GCP terminal" src="https://user-images.githubusercontent.com/26833433/142223900-275e5c9e-e2b5-43f7-a21c-35c4ca7de87c.png">

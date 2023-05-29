@@ -37,7 +37,7 @@ def logout():
 
 def start(key=''):
     """
-    Start training models with Ultralytics HUB (DEPRECATED).
+    Start training add_models with Ultralytics HUB (DEPRECATED).
 
     Args:
         key (str, optional): A string containing either the API key and model ID combination (apikey_modelid),
@@ -45,7 +45,7 @@ def start(key=''):
     """
     api_key, model_id = key.split('_')
     LOGGER.warning(f"""
-WARNING ⚠️ ultralytics.start() is deprecated after 8.0.60. Updated usage to train Ultralytics HUB models is:
+WARNING ⚠️ ultralytics.start() is deprecated after 8.0.60. Updated usage to train Ultralytics HUB add_models is:
 
 from ultralytics import YOLO, hub
 

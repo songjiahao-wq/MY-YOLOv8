@@ -305,7 +305,7 @@ class VisionTransformer(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.local_up_to_layer = local_up_to_layer
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other add_models
         self.locality_strength = locality_strength
         self.use_pos_embed = use_pos_embed
 

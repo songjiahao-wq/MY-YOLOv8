@@ -3,7 +3,7 @@ A PyTorch impl of : `Swin Transformer V2: Scaling Up Capacity and Resolution`
     - https://arxiv.org/pdf/2111.09883
 Code adapted from https://github.com/ChristophReich1996/Swin-Transformer-V2, original copyright/license info below
 This implementation is experimental and subject to change in manners that will break weight compat:
-* Size of the pos embed MLP are not spelled out in paper in terms of dim, fixed for all models? vary with num_heads?
+* Size of the pos embed MLP are not spelled out in paper in terms of dim, fixed for all add_models? vary with num_heads?
   * currently dim is fixed, I feel it may make sense to scale with num_heads (dim per head)
 * The specifics of the memory saving 'sequential attention' are not detailed, Christoph Reich has an impl at
   GitHub link above. It needs further investigation as throughput vs mem tradeoff doesn't appear beneficial.
@@ -339,7 +339,7 @@ class SwinTransformerBlock(nn.Module):
         self.norm2 = norm_layer(dim)
         self.drop_path2 = DropPath(drop_prob=drop_path) if drop_path > 0.0 else nn.Identity()
 
-        # Extra main branch norm layer mentioned for Huge/Giant models in V2 paper.
+        # Extra main branch norm layer mentioned for Huge/Giant add_models in V2 paper.
         # Also being used as final network norm and optional stage ending norm while still in a C-last format.
         self.norm3 = norm_layer(dim) if extra_norm else nn.Identity()
 
@@ -796,7 +796,7 @@ def checkpoint_filter_fn(state_dict, model):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
     out_dict = {}
     if 'model' in state_dict:
-        # For deit models
+        # For deit add_models
         state_dict = state_dict['model']
     for k, v in state_dict.items():
         if 'tau' in k:
@@ -809,7 +809,7 @@ def checkpoint_filter_fn(state_dict, model):
 
 def _create_swin_transformer_v2_cr(variant, pretrained=False, **kwargs):
     if kwargs.get('features_only', None):
-        raise RuntimeError('features_only not implemented for Vision Transformer models.')
+        raise RuntimeError('features_only not implemented for Vision Transformer add_models.')
     model = build_model_with_cfg(
         SwinTransformerV2Cr, variant, pretrained,
         pretrained_filter_fn=checkpoint_filter_fn,

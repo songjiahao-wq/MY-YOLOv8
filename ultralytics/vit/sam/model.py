@@ -28,12 +28,12 @@ class SAM:
         return self.predictor(source, stream=stream)
 
     def train(self, **kwargs):
-        """Function trains models but raises an error as SAM models do not support training."""
-        raise NotImplementedError("SAM models don't support training")
+        """Function trains add_models but raises an error as SAM add_models do not support training."""
+        raise NotImplementedError("SAM add_models don't support training")
 
     def val(self, **kwargs):
         """Run validation given dataset."""
-        raise NotImplementedError("SAM models don't support validation")
+        raise NotImplementedError("SAM add_models don't support validation")
 
     def info(self, detailed=False, verbose=True):
         """

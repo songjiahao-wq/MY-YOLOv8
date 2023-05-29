@@ -614,7 +614,7 @@ class SwinTransformerV2(nn.Module):
 def checkpoint_filter_fn(state_dict, model):
     out_dict = {}
     if 'model' in state_dict:
-        # For deit models
+        # For deit add_models
         state_dict = state_dict['model']
     for k, v in state_dict.items():
         if any([n in k for n in ('relative_position_index', 'relative_coords_table')]):

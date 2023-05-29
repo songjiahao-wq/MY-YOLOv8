@@ -26,7 +26,7 @@ def coco91_to_coco80_class():
 
 
 def convert_coco(labels_dir='../coco/annotations/', use_segments=False, use_keypoints=False, cls91to80=True):
-    """Converts COCO dataset annotations to a format suitable for training YOLOv5 models.
+    """Converts COCO dataset annotations to a format suitable for training YOLOv5 add_models.
 
     Args:
         labels_dir (str, optional): Path to directory containing COCO dataset annotation files.

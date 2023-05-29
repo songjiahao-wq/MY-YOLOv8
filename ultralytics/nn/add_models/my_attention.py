@@ -6,7 +6,7 @@ import math
 import numpy as np
 import torchvision
 from torch.nn.parameter import Parameter
-# from models.experimental import MixConv2d
+# from add_models.experimental import MixConv2d
 class MixConv2d(nn.Module):
     # Mixed Depth-wise Conv https://arxiv.org/abs/1907.09595
     def __init__(self, c1, c2, k=(1, 3), s=1, equal_ch=True):  # ch_in, ch_out, kernel, stride, ch_strategy

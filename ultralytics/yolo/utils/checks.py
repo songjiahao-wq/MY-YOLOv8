@@ -269,9 +269,9 @@ def check_yolov5u_filename(file: str, verbose: bool = True):
         file = re.sub(r'(.*yolov5([nsmlx])6)\.pt', '\\1u.pt', file)  # i.e. yolov5n6.pt -> yolov5n6u.pt
         file = re.sub(r'(.*yolov3(|-tiny|-spp))\.pt', '\\1u.pt', file)  # i.e. yolov3-spp.pt -> yolov3-sppu.pt
         if file != original_file and verbose:
-            LOGGER.info(f"PRO TIP 💡 Replace 'model={original_file}' with new 'model={file}'.\nYOLOv5 'u' models are "
+            LOGGER.info(f"PRO TIP 💡 Replace 'model={original_file}' with new 'model={file}'.\nYOLOv5 'u' add_models are "
                         f'trained with https://github.com/ultralytics/ultralytics and feature improved performance vs '
-                        f'standard YOLOv5 models trained with https://github.com/ultralytics/yolov5.\n')
+                        f'standard YOLOv5 add_models trained with https://github.com/ultralytics/yolov5.\n')
     return file
 
 
@@ -292,7 +292,7 @@ def check_file(file, suffix='', download=True, hard=True):
         return file
     else:  # search
         files = []
-        for d in 'models', 'datasets', 'tracker/cfg', 'yolo/cfg':  # search directories
+        for d in 'add_models', 'datasets', 'tracker/cfg', 'yolo/cfg':  # search directories
             files.extend(glob.glob(str(ROOT / d / '**' / file), recursive=True))  # find file
         if not files and hard:
             raise FileNotFoundError(f"'{file}' does not exist")

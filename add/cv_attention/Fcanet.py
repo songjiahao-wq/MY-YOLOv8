@@ -55,7 +55,7 @@ class MultiSpectralAttentionLayer(torch.nn.Module):
         if h != self.dct_h or w != self.dct_w:
             x_pooled = torch.nn.functional.adaptive_avg_pool2d(x, (self.dct_h, self.dct_w))
             # If you have concerns about one-line-change, don't worry.   :)
-            # In the ImageNet models, this line will never be triggered.
+            # In the ImageNet add_models, this line will never be triggered.
             # This is for compatibility in instance segmentation and object detection.
         y = self.dct_layer(x_pooled)
 

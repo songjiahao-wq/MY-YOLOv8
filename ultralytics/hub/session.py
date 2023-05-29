@@ -15,7 +15,7 @@ AGENT_NAME = f'python-{__version__}-colab' if is_colab() else f'python-{__versio
 
 class HUBTrainingSession:
     """
-    HUB training session for Ultralytics HUB YOLO models. Handles model initialization, heartbeats, and checkpointing.
+    HUB training session for Ultralytics HUB YOLO add_models. Handles model initialization, heartbeats, and checkpointing.
 
     Args:
         url (str): Model identifier used to initialize the HUB training session.
@@ -64,7 +64,7 @@ class HUBTrainingSession:
         self.agent_id = None  # identifies which instance is communicating with server
         self.model_id = model_id
         self.model_url = f'https://hub.ultralytics.com/models/{model_id}'
-        self.api_url = f'{HUB_API_ROOT}/v1/models/{model_id}'
+        self.api_url = f'{HUB_API_ROOT}/v1/add_models/{model_id}'
         self.auth_header = auth.get_auth_header()
         self.rate_limits = {'metrics': 3.0, 'ckpt': 900.0, 'heartbeat': 300.0}  # rate limits (seconds)
         self.timers = {}  # rate limit timers (seconds)
@@ -101,7 +101,7 @@ class HUBTrainingSession:
 
     def _get_model(self):
         """Fetch and return model data from Ultralytics HUB."""
-        api_url = f'{HUB_API_ROOT}/v1/models/{self.model_id}'
+        api_url = f'{HUB_API_ROOT}/v1/add_models/{self.model_id}'
 
         try:
             response = smart_request('get', api_url, headers=self.auth_header, thread=False, code=0)
@@ -177,7 +177,7 @@ class HUBTrainingSession:
         """Begin a threaded heartbeat loop to report the agent's status to Ultralytics HUB."""
         while self.alive:
             r = smart_request('post',
-                              f'{HUB_API_ROOT}/v1/agent/heartbeat/models/{self.model_id}',
+                              f'{HUB_API_ROOT}/v1/agent/heartbeat/add_models/{self.model_id}',
                               json={
                                   'agent': AGENT_NAME,
                                   'agentId': self.agent_id},

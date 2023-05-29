@@ -517,7 +517,7 @@ class Exporter:
         subprocess.run(cmd, shell=True)
         yaml_save(f / 'metadata.yaml', self.metadata)  # add metadata.yaml
 
-        # Remove/rename TFLite models
+        # Remove/rename TFLite add_models
         if self.args.int8:
             for file in f.rglob('*_dynamic_range_quant.tflite'):
                 file.rename(file.with_stem(file.stem.replace('_dynamic_range_quant', '_int8')))
@@ -629,7 +629,7 @@ class Exporter:
         return f, None
 
     def _add_tflite_metadata(self, file):
-        """Add metadata to *.tflite models per https://www.tensorflow.org/lite/models/convert/metadata."""
+        """Add metadata to *.tflite add_models per https://www.tensorflow.org/lite/models/convert/metadata."""
         from tflite_support import flatbuffers  # noqa
         from tflite_support import metadata as _metadata  # noqa
         from tflite_support import metadata_schema_py_generated as _metadata_fb  # noqa
@@ -720,7 +720,7 @@ class Exporter:
         # spec.neuralNetwork.preprocessing[0].featureName = '0'
 
         # Flexible input shapes
-        # from coremltools.models.neural_network import flexible_shape_utils
+        # from coremltools.add_models.neural_network import flexible_shape_utils
         # s = [] # shapes
         # s.append(flexible_shape_utils.NeuralNetworkImageSize(320, 192))
         # s.append(flexible_shape_utils.NeuralNetworkImageSize(640, 384))  # (height, width)
@@ -773,7 +773,7 @@ class Exporter:
         nms.stringClassLabels.vector.extend(names.values())
         nms_model = ct.models.MLModel(nms_spec)
 
-        # 4. Pipeline models together
+        # 4. Pipeline add_models together
         pipeline = ct.models.pipeline.Pipeline(input_features=[('image', ct.models.datatypes.Array(3, ny, nx)),
                                                                ('iouThreshold', ct.models.datatypes.Double()),
                                                                ('confidenceThreshold', ct.models.datatypes.Double())],

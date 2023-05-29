@@ -4,10 +4,10 @@ import contextlib
 from copy import deepcopy
 from pathlib import Path
 
-import thop
 import torch
 import torch.nn as nn
-
+from ultralytics.nn.add_models.add_modules import *
+from ultralytics.nn.Moudle import *
 from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x,
                                     Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
                                     Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
@@ -23,12 +23,11 @@ try:
 except ImportError:
     thop = None
 
-from ultralytics.nn.Moudle import *
-from ultralytics.nn.modules import *
+
 
 class BaseModel(nn.Module):
     """
-    The BaseModel class serves as a base class for all the models in the Ultralytics YOLO family.
+    The BaseModel class serves as a base class for all the add_models in the Ultralytics YOLO family.
     """
 
     def forward(self, x, profile=False, visualize=False):
@@ -173,7 +172,7 @@ class BaseModel(nn.Module):
             weights (dict) or (torch.nn.Module): The pre-trained weights to be loaded.
             verbose (bool, optional): Whether to log the transfer progress. Defaults to True.
         """
-        model = weights['model'] if isinstance(weights, dict) else weights  # torchvision models are not dicts
+        model = weights['model'] if isinstance(weights, dict) else weights  # torchvision add_models are not dicts
         csd = model.float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
@@ -304,7 +303,7 @@ class ClassificationModel(BaseModel):
         m = model.model[-1]  # last layer
         ch = m.conv.in_channels if hasattr(m, 'conv') else m.cv1.conv.in_channels  # ch into module
         c = Classify(ch, nc)  # Classify()
-        c.i, c.f, c.type = m.i, m.f, 'models.common.Classify'  # index, from, type
+        c.i, c.f, c.type = m.i, m.f, 'add_models.common.Classify'  # index, from, type
         model.model[-1] = c  # replace
         self.model = model.model
         self.stride = model.stride
@@ -350,10 +349,10 @@ class ClassificationModel(BaseModel):
 
 
 class Ensemble(nn.ModuleList):
-    """Ensemble of models."""
+    """Ensemble of add_models."""
 
     def __init__(self):
-        """Initialize an ensemble of models."""
+        """Initialize an ensemble of add_models."""
         super().__init__()
 
     def forward(self, x, augment=False, profile=False, visualize=False):
@@ -387,7 +386,7 @@ def torch_safe_load(weight):
     try:
         return torch.load(file, map_location='cpu'), file  # load
     except ModuleNotFoundError as e:  # e.name is missing module name
-        if e.name == 'models':
+        if e.name == 'add_models':
             raise TypeError(
                 emojis(f'ERROR ❌️ {weight} appears to be an Ultralytics YOLOv5 model originally trained '
                        f'with https://github.com/ultralytics/yolov5.\nThis model is NOT forwards compatible with '
@@ -404,7 +403,7 @@ def torch_safe_load(weight):
 
 
 def attempt_load_weights(weights, device=None, inplace=True, fuse=False):
-    """Loads an ensemble of models weights=[a,b,c] or a single model weights=[a] or weights=a."""
+    """Loads an ensemble of add_models weights=[a,b,c] or a single model weights=[a] or weights=a."""
 
     ensemble = Ensemble()
     for w in weights if isinstance(weights, list) else [weights]:
@@ -581,7 +580,7 @@ def yaml_model_load(path):
     path = Path(path)
     if path.stem in (f'yolov{d}{x}6' for x in 'nsmlx' for d in (5, 8)):
         new_stem = re.sub(r'(\d+)([nslmx])6(.+)?$', r'\1\2-p6\3', path.stem)
-        LOGGER.warning(f'WARNING ⚠️ Ultralytics YOLO P6 models now use -p6 suffix. Renaming {path.stem} to {new_stem}.')
+        LOGGER.warning(f'WARNING ⚠️ Ultralytics YOLO P6 add_models now use -p6 suffix. Renaming {path.stem} to {new_stem}.')
         path = path.with_stem(new_stem)
 
     unified_path = re.sub(r'(\d+)([nslmx])(.+)?$', r'\1\3', str(path))  # i.e. yolov8x.yaml -> yolov8.yaml

@@ -115,7 +115,7 @@ class ODConv2d(nn.Module):
 
     def _forward_impl_common(self, x):
         # Multiplying channel attention (or filter attention) to weights and feature maps are equivalent,
-        # while we observe that when using the latter method the models will run faster with less gpu memory cost.
+        # while we observe that when using the latter method the add_models will run faster with less gpu memory cost.
         channel_attention, filter_attention, spatial_attention, kernel_attention = self.attention(x)
         batch_size, in_planes, height, width = x.size()
         x = x * channel_attention

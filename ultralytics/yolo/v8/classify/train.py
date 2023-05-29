@@ -48,7 +48,7 @@ class ClassificationTrainer(BaseTrainer):
         """
         load/create/download model for any task
         """
-        # Classification models require special handling
+        # Classification add_models require special handling
 
         if isinstance(self.model, torch.nn.Module):  # if model is loaded beforehand. No setup needed
             return

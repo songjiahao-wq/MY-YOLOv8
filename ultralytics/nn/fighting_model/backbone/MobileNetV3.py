@@ -212,7 +212,7 @@ class MobileNetV3(nn.Module):
 class MobileNetV3Features(nn.Module):
     """ MobileNetV3 Feature Extractor
     A work-in-progress feature extraction module for MobileNet-V3 to use as a backbone for segmentation
-    and object detection models.
+    and object detection add_models.
     """
     
     def __init__(

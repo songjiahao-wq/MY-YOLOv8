@@ -192,7 +192,7 @@ class ShuffleTransformer(nn.Module):
                 has_pos_embed=False, **kwargs):
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other add_models
         self.has_pos_embed = has_pos_embed
         dims = [i*32 for i in num_heads]
 

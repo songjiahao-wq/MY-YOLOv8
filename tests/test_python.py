@@ -173,7 +173,7 @@ def test_export_paddle(enabled=False):
 
 
 def test_all_model_yamls():
-    for m in list((ROOT / 'models').rglob('yolo*.yaml')):
+    for m in list((ROOT / 'add_models').rglob('yolo*.yaml')):
         YOLO(m.name)
 
 

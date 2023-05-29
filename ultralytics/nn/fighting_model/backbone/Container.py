@@ -292,7 +292,7 @@ class VisionTransformer(nn.Module):
         """
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other add_models
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6) 
         self.embed_dim = embed_dim
         self.depth = depth

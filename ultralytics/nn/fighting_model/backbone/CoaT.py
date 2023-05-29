@@ -1,7 +1,7 @@
 """ 
 CoaT architecture.
 
-Modified from timm/models/vision_transformer.py
+Modified from timm/add_models/vision_transformer.py
 """
 
 import torch

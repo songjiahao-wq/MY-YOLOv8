@@ -74,8 +74,8 @@ class RTDETR:
         return self.predictor(source, stream=stream)
 
     def train(self, **kwargs):
-        """Function trains models but raises an error as RTDETR models do not support training."""
-        raise NotImplementedError("RTDETR models don't support training")
+        """Function trains add_models but raises an error as RTDETR add_models do not support training."""
+        raise NotImplementedError("RTDETR add_models don't support training")
 
     def val(self, **kwargs):
         """Run validation given dataset."""

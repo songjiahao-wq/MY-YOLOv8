@@ -57,7 +57,7 @@ Now you can train, test, detect, and export YOLOv5 models within the running Doc
 python train.py  # train a model
 python val.py --weights yolov5s.pt  # validate a model for Precision, Recall, and mAP
 python detect.py --weights yolov5s.pt --source path/to/images  # run inference on images and videos
-python export.py --weights yolov5s.pt --include onnx coreml tflite  # export models to other formats
+python export.py --weights yolov5s.pt --include onnx coreml tflite  # export add_models to other formats
 ```
 
 <p align="center"><img width="1000" src="https://user-images.githubusercontent.com/26833433/142224770-6e57caaf-ac01-4719-987f-c37d1b6f401f.png"></p>

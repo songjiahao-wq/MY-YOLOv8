@@ -491,7 +491,7 @@ class Concat(nn.Module):
 
 
 class Proto(nn.Module):
-    """YOLOv8 mask Proto module for segmentation models."""
+    """YOLOv8 mask Proto module for segmentation add_models."""
 
     def __init__(self, c1, c_=256, c2=32):  # ch_in, number of protos, number of masks
         super().__init__()
@@ -506,10 +506,10 @@ class Proto(nn.Module):
 
 
 class Ensemble(nn.ModuleList):
-    """Ensemble of models."""
+    """Ensemble of add_models."""
 
     def __init__(self):
-        """Initialize an ensemble of models."""
+        """Initialize an ensemble of add_models."""
         super().__init__()
 
     def forward(self, x, augment=False, profile=False, visualize=False):
@@ -525,7 +525,7 @@ class Ensemble(nn.ModuleList):
 
 
 class Detect(nn.Module):
-    """YOLOv8 Detect head for detection models."""
+    """YOLOv8 Detect head for detection add_models."""
     dynamic = False  # force grid reconstruction
     export = False  # export mode
     shape = None
@@ -612,7 +612,7 @@ class LayerNorm2d(nn.Module):
 
 
 class Segment(Detect):
-    """YOLOv8 Segment head for segmentation models."""
+    """YOLOv8 Segment head for segmentation add_models."""
 
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers."""
@@ -638,7 +638,7 @@ class Segment(Detect):
 
 
 class Pose(Detect):
-    """YOLOv8 Pose head for keypoints models."""
+    """YOLOv8 Pose head for keypoints add_models."""
 
     def __init__(self, nc=80, kpt_shape=(17, 3), ch=()):
         """Initialize YOLO network with default parameters and Convolutional Layers."""
@@ -1427,7 +1427,7 @@ class MultiSpectralAttentionLayer(torch.nn.Module):
         if h != self.dct_h or w != self.dct_w:
             x_pooled = torch.nn.functional.adaptive_avg_pool2d(x, (self.dct_h, self.dct_w))
             # If you have concerns about one-line-change, don't worry.   :)
-            # In the ImageNet models, this line will never be triggered.
+            # In the ImageNet add_models, this line will never be triggered.
             # This is for compatibility in instance segmentation and object detection.
         y = self.dct_layer(x_pooled)
 
