@@ -14,7 +14,7 @@ if __name__ == '__main__':
     # results = model("https://ultralytics.com/images/bus.jpg")  # 预测图像
     # success = model.export(format="onnx")  # 将模型导出为 ONNX 格式
 
-# '''
+# CIL调用方式
 # # Build a new model from YAML and start training from scratch
 # yolo detect train data=coco128.yaml model=yolov8n.yaml epochs=100 imgsz=640
 #
