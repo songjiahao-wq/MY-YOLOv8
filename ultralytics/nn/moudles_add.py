@@ -297,7 +297,7 @@ class Attention(nn.Module):
     vanilla attention
     """
 
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim,c2, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -342,7 +342,7 @@ class AttentionLePE(nn.Module):
     vanilla attention
     """
 
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., side_dwconv=5):
+    def __init__(self, dim,c2, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., side_dwconv=5):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads

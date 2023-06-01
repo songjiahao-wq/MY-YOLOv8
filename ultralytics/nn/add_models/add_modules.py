@@ -185,7 +185,8 @@ class Bottleneck_ATT(nn.Module):
         # Squeeze-and-excitation
         if has_ATT:
             # self.ATT = GAM_Attention(c2,c2)
-            self.ATT = BiLevelRoutingAttention(c2,c2)
+            # self.ATT = BiLevelRoutingAttention(c2,c2)
+            self.ATT = AttentionLePE(c2,c2)
         else:
             self.ATT = None
     def forward(self, x):
