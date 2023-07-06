@@ -1,4 +1,5 @@
 from ultralytics import YOLO
+
 if __name__ == '__main__':
     # 断点续练
     # model = YOLO(r"F:\sjh\code\ultralytics\runs\detect\cfg\weights\last.pt")
@@ -9,7 +10,7 @@ if __name__ == '__main__':
     # model = YOLO("runs/detect/v5n9/weights/best.pt")  # 加载预训练模型（推荐用于训练）
 
     # Use the model
-    results = model.train(data="VOC_five.yaml", epochs=100, batch=16, imgsz=640, workers=8, close_mosaic=0 , name='8s_SKConv_dfl1.2')  # 训练模型
+    results = model.train(data="VOC_five.yaml", epochs=100, batch=16, imgsz=640, workers=8, close_mosaic=0, name='8s_SKConv_dfl1.2')  # 训练模型
     # results = model.val()  # 在验证集上评估模型性能
     # results = model("https://ultralytics.com/images/bus.jpg")  # 预测图像
     # success = model.export(format="onnx")  # 将模型导出为 ONNX 格式
@@ -17,13 +18,13 @@ if __name__ == '__main__':
 # CIL调用方式
 # # Build a new model from YAML and start training from scratch
 # yolo detect train data=coco128.yaml model=yolov8n.yaml epochs=100 imgsz=640
-#
+
 # # Start training from a pretrained *.pt model
 # yolo detect train data=coco128.yaml model=yolov8n.pt epochs=100 imgsz=640
-#
+
 # # Build a new model from YAML, transfer pretrained weights to it and start training
 # yolo detect train data=coco128.yaml model=yolov8n.yaml pretrained=yolov8n.pt epochs=100 imgsz=640
-# '''
+
 
 #参数列表
 # model	None	模型文件的路径，即 yolov8n.pt，yolov8n.yaml
