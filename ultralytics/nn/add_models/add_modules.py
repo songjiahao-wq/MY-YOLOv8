@@ -172,6 +172,13 @@ class Bottleneck(nn.Module):
         """'forward()' applies the YOLOv5 FPN to input data."""
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
+class Bottleneck_GSConv(Bottleneck):
+    def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5):
+        super(Bottleneck_GSConv, self).__init__(c1, c2)
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = GSConv(c1, c_, 1, 1)
+        self.cv2 = GSConv(c_, c2, k[1], 1, g=g)
+
 class Bottleneck_ATT(nn.Module):
     # Standard bottleneck
     def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5, use_ATT=0.):  # ch_in, ch_out, shortcut, groups, kernels, expand
@@ -272,7 +279,27 @@ class C2f(nn.Module):
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
 
+class C2f_GSConv(nn.Module):
+    """CSP Bottleneck with 2 convolutions."""
 
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(Bottleneck_GSConv(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
+
+    def forward(self, x):
+        """Forward pass through C2f layer."""
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
+    def forward_split(self, x):
+        """Forward pass using split() instead of chunk()."""
+        y = list(self.cv1(x).split((self.c, self.c), 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
 class C2f_Bottleneck_ATT(nn.Module):
     # CSP Bottleneck with 2 convolutions
     def __init__(self, c1, c2, n=1, shortcut=False, use_ATT=0., g=1,
@@ -2010,7 +2037,6 @@ class EMA(nn.Module):
         return (group_x * weights.sigmoid()).reshape(b, c, h, w)
 
 # GSConv+YOLOv5+GSConv+Slim Neck
-
 class GSConv(nn.Module):
     # GSConv https://github.com/AlanLi1997/slim-neck-by-gsconv
     def __init__(self, c1, c2, k=1, s=1, g=1, act=True):
@@ -2033,22 +2059,23 @@ class GSConv(nn.Module):
 
 class GSBottleneck(nn.Module):
     # GS Bottleneck https://github.com/AlanLi1997/slim-neck-by-gsconv
-    def __init__(self, c1, c2, k=3, s=1):
+    def __init__(self, c1, c2, k=3, s=1, e=0.5):
         super().__init__()
-        c_ = c2 // 2
+        c_ = int(c2*e)
         # for lighting
         self.conv_lighting = nn.Sequential(
             GSConv(c1, c_, 1, 1),
-            GSConv(c_, c2, 1, 1, act=False))
-        # for receptive field
-        self.conv = nn.Sequential(
-            GSConv(c1, c_, 3, 1),
             GSConv(c_, c2, 3, 1, act=False))
-        self.shortcut = nn.Identity()
+        self.shortcut = Conv(c1, c2, 1, 1, act=False)
 
     def forward(self, x):
-        return self.conv_lighting(x)
+        return self.conv_lighting(x) + self.shortcut(x)
 
+class GSBottleneckC(GSBottleneck):
+    # cheap GS Bottleneck https://github.com/AlanLi1997/slim-neck-by-gsconv
+    def __init__(self, c1, c2, k=3, s=1):
+        super().__init__(c1, c2, k, s)
+        self.shortcut = DWConv(c1, c2, k, s, act=False)
 
 class VoVGSCSP(nn.Module):
     # VoV-GSCSP https://github.com/AlanLi1997/slim-neck-by-gsconv
@@ -2062,9 +2089,17 @@ class VoVGSCSP(nn.Module):
     def forward(self, x):
         x1 = self.cv1(x)
         return self.cv2(torch.cat((self.m(x1), x1), dim=1))
+
+class VoVGSCSPC(VoVGSCSP):
+    # cheap VoVGSCSP module with GSBottleneck
+    def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
+        super().__init__(c1, c2)
+        c_ = int(c2 * 0.5)  # hidden channels
+        self.gsb = GSBottleneckC(c_, c_, 1, 1)
+
 if __name__ =="__main__":
     x = torch.randn(2, 64, 20, 20)
     b, c, h, w = x.shape
-    net = ResidualGroupConv(64, 128,3,2)
+    net = GSConv(64, 128,1,1)
     y = net(x)
     print(y.size())

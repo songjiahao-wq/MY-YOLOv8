@@ -29,7 +29,7 @@ class BaseModel(nn.Module):
     The BaseModel class serves as a base class for all the add_models in the Ultralytics YOLO family.
     """
 
-    def forward(self, x, profile=False, visualize=False):
+    def forward(self, x, profile=True, visualize=False):
         """
         Forward pass of the model on a single scale.
         Wrapper for `_forward_once` method.
@@ -84,10 +84,10 @@ class BaseModel(nn.Module):
             None
         """
         c = m == self.model[-1]  # is final layer, copy input as inplace fix
-        o = thop.profile(m, inputs=[x.clone() if c else x], verbose=False)[0] / 1E9 * 2 if thop else 0  # FLOPs
+        o = thop.profile(m, inputs=[x.copy() if c else x], verbose=False)[0] / 1E9 * 2 if thop else 0  # FLOPs
         t = time_sync()
         for _ in range(10):
-            m(x.clone() if c else x)
+            m(x.copy() if c else x)
         dt.append((time_sync() - t) * 100)
         if m == self.model[0]:
             LOGGER.info(f"{'time (ms)':>10s} {'GFLOPs':>10s} {'params':>10s}  module")
@@ -504,14 +504,14 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
                  BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3,
                  C2f_Bottleneck_ATT, C2f_Faster, SPPF_Biformer, BiLevelRoutingAttention, stem, MBConvBlock, FusedMBConv, MBConv, C2f_PConv, RFCAConv,
-                 PSA, DCNv22, C2f_Res2, C2f_ODConv, MobileNet_Block, conv_bn_hswish ):
+                 PSA, DCNv22, C2f_Res2, C2f_ODConv, MobileNet_Block, conv_bn_hswish, C2f_GSConv):
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
 
             args = [c1, c2, *args[1:]]
             if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x, RepC3,
-                     C2f_Bottleneck_ATT, C2f_Faster, C2f_PConv, C2f_ODConv):
+                     C2f_Bottleneck_ATT, C2f_Faster, C2f_PConv, C2f_ODConv, C2f_GSConv):
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is AIFI:
