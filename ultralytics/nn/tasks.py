@@ -544,6 +544,14 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             GHOSTBottleneck_layers.append(n)
             args = [block, GHOSTBottleneck_layers, widths, args[1]]
             n = 1
+        elif m is ASFF2:
+            c1, c2 = [ch[f[0]], ch[f[1]]], args[0]
+            c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
+        elif m is ASFF3:
+            c1, c2 = [ch[f[0]], ch[f[1]], ch[f[2]]], args[0]
+            c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
         elif m is HorNet:
             c2 = args[0]
             args = args[1:]
