@@ -7,7 +7,7 @@ if __name__ == '__main__':
     # model.train(resume=True)
 
     # 加载模型
-    model = YOLO('runs/detect/yolov8-conv-connect/weights/last.pt')  # 从头开始构建新模型
+    model = YOLO('runs/detect/yolov8n-SPPCSPC/weights/last.pt')  # 从头开始构建新模型
     # Use the model
     results = model.train(resume=True)  # 训练模型
     # results = model.val()  # 在验证集上评估模型性能

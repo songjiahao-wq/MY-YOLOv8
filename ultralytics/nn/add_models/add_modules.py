@@ -320,7 +320,25 @@ class C2f_Bottleneck_ATT(nn.Module):
         y = list(self.cv1(x).split((self.c, self.c), 1))
         y.extend(m(y[-1]) for m in self.m)
         return self.cv2(torch.cat(y, 1))
+class SPPCSPC(nn.Module):
+    # CSP https://github.com/WongKinYiu/CrossStagePartialNetworks
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5, k=(5, 9, 13)):
+        super(SPPCSPC, self).__init__()
+        c_ = int(2 * c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c1, c_, 1, 1)
+        self.cv3 = Conv(c_, c_, 3, 1)
+        self.cv4 = Conv(c_, c_, 1, 1)
+        self.m = nn.ModuleList([nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2) for x in k])
+        self.cv5 = Conv(4 * c_, c_, 1, 1)
+        self.cv6 = Conv(c_, c_, 3, 1)
+        self.cv7 = Conv(2 * c_, c2, 1, 1)
 
+    def forward(self, x):
+        x1 = self.cv4(self.cv3(self.cv1(x)))
+        y1 = self.cv6(self.cv5(torch.cat([x1] + [m(x1) for m in self.m], 1)))
+        y2 = self.cv2(x)
+        return self.cv7(torch.cat((y1, y2), dim=1))
 
 class ChannelAttention(nn.Module):
     """Channel-attention module https://github.com/open-mmlab/mmdetection/tree/v3.0.0rc1/configs/rtmdet."""
@@ -2213,6 +2231,55 @@ class ASFF3(nn.Module):
 
         fused_out_reduced = level_0_resized * w[:, :1] + level_1_resized * w[:, 1:2] + level_2_resized * w[:, 2:]
         return self.conv(fused_out_reduced)
+#CoordConv**************************************************
+class AddCoords(nn.Module):
+    def __init__(self, with_r=False):
+        super().__init__()
+        self.with_r = with_r
+
+    def forward(self, input_tensor):
+        """
+        Args:
+            input_tensor: shape(batch, channel, x_dim, y_dim)
+        """
+        batch_size, _, x_dim, y_dim = input_tensor.shape
+
+        xx_channel = torch.arange(x_dim).repeat(1, y_dim, 1)
+        yy_channel = torch.arange(y_dim).repeat(1, x_dim, 1).transpose(1, 2)
+
+        xx_channel = xx_channel.float() / (x_dim - 1)
+        yy_channel = yy_channel.float() / (y_dim - 1)
+
+        xx_channel = xx_channel * 2 - 1
+        yy_channel = yy_channel * 2 - 1
+
+        xx_channel = xx_channel.repeat(batch_size, 1, 1, 1).transpose(2, 3)
+        yy_channel = yy_channel.repeat(batch_size, 1, 1, 1).transpose(2, 3)
+
+        ret = torch.cat([
+            input_tensor,
+            xx_channel.type_as(input_tensor),
+            yy_channel.type_as(input_tensor)], dim=1)
+
+        if self.with_r:
+            rr = torch.sqrt(torch.pow(xx_channel.type_as(input_tensor) - 0.5, 2) + torch.pow(yy_channel.type_as(input_tensor) - 0.5, 2))
+            ret = torch.cat([ret, rr], dim=1)
+
+        return ret
+class CoordConv(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, with_r=False):
+        super().__init__()
+        self.addcoords = AddCoords(with_r=with_r)
+        in_channels += 2
+        if with_r:
+            in_channels += 1
+        self.conv = Conv(in_channels, out_channels, k=kernel_size, s=stride)
+
+    def forward(self, x):
+        x = self.addcoords(x)
+        x = self.conv(x)
+        return x
 if __name__ =="__main__":
     x = torch.randn(2, 64, 20, 20)
     b, c, h, w = x.shape

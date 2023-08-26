@@ -11,7 +11,7 @@ from ultralytics.nn.impotr_Moudle import *
 from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x,
                                     Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
                                     Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
-                                    RTDETRDecoder, Segment)
+                                    RTDETRDecoder, Segment, C2f_CoorConv)
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.yolo.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.yolo.utils.plotting import feature_visualization
@@ -504,7 +504,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
                  BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3,
                  C2f_Bottleneck_ATT, C2f_Faster, SPPF_Biformer, BiLevelRoutingAttention, stem, MBConvBlock, FusedMBConv, MBConv, C2f_PConv, RFCAConv,
-                 PSA, DCNv22, C2f_Res2, C2f_ODConv, MobileNet_Block, conv_bn_hswish, C2f_GSConv):
+                 PSA, DCNv22, C2f_Res2, C2f_ODConv, MobileNet_Block, conv_bn_hswish, C2f_GSConv, C2f_CoorConv):
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
@@ -527,7 +527,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         # """**************add Attention***************"""
         elif m in {GAM_Attention, SpectralAttention, SoftThresholdAttentionResidual, MultiSpectralAttentionLayer, CBAM,EffectiveSEModule,
                    CAMConv, CAConv, CBAMConv, RFAConv, LightweightSPPFA, SPPA_CBAM, SPPFC, PSAMix, ResidualGroupConv, PSAModule_s,
-                   DyMCAConv, DyCAConv, CAConv2, SKConv,  GSConv, VoVGSCSP}:
+                   DyMCAConv, DyCAConv, CAConv2, SKConv,  GSConv, VoVGSCSP, SPPCSPC}:
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if not output
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
