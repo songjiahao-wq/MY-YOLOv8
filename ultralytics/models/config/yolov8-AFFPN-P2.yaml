@@ -28,11 +28,12 @@ backbone:
 # YOLOv8.0n AFPN head
 head:
   - [2, 1, Conv, [64, 1, 1]] # 10 downsample backbone P3
-  - [4, 1, Conv, [128, 1, 1]] # 10 downsample backbone P3
-  - [6, 1, Conv, [256, 1, 1]] # 11 downsample backbone P4
+  - [4, 1, Conv, [128, 1, 1]] # 11 downsample backbone P3
+  - [6, 1, Conv, [256, 1, 1]] # 12 downsample backbone P4
 
-  - [[10, 11], 1, ASFF2, [128, 0]] # 12
-  - [[10, 11], 1, ASFF2, [256, 1]] # 13
+  - [[10, 11, 12], 1, ASFF3, [64, 0]] # 17
+  - [[10, 11, 12], 1, ASFF3, [128, 1]] # 18
+  - [[10, 11, 12], 1, ASFF3, [256, 2]] # 19
 
   - [-2, 1, C2f, [128, False]] # 14
   - [-2, 1, C2f, [256, False]] # 15

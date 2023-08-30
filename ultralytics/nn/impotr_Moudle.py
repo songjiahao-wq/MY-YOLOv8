@@ -5,7 +5,7 @@ from ultralytics.nn.moudles_add import BiLevelRoutingAttention, AttentionLePE, A
 from ultralytics.nn.fighting_model.backbone.HorNet import HorNet
 from ultralytics.nn.fighting_model.backbone.convnextv2 import convnextv2_att
 from ultralytics.nn.add_models.my_attention import *
-
+from ultralytics.nn.fighting_model.backbone.repghost import RepGhostBottleneck
 
 
 

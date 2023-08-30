@@ -558,6 +558,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c1, c2 = [ch[f[0]], ch[f[1]], ch[f[2]]], args[0]
             c2 = make_divisible(min(c2, max_channels) * width, 8)
             args = [c1, c2, *args[1:]]
+        elif m is ASFF4:
+            c1, c2 = [ch[f[0]], ch[f[1]], ch[f[2]], ch[f[3]]], args[0]
+            c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
         elif m is HorNet:
             c2 = args[0]
             args = args[1:]
