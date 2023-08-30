@@ -118,6 +118,8 @@ class BaseModel(nn.Module):
                 if isinstance(m, RepConv):
                     m.fuse_convs()
                     m.forward = m.forward_fuse  # update forward
+                if hasattr(m, ('RepGhostModule')):
+                    m.switch_to_deploy()
             self.info(verbose=verbose)
 
         return self
@@ -532,7 +534,11 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             if c2 != nc:  # if not output
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             args = [c1, c2, *args[1:]]
-
+        elif m is RepGhostBottleneck:
+            c1, mid, c2 = ch[f],args[1], args[2]
+            mid = make_divisible(mid * width, 4)
+            c2 = make_divisible(c2 * width, 4)
+            args = [c1, mid, c2, *args[3:]]
         elif m is convnextv2_att:
             c2 = args[0]
             # args = args[1:]
