@@ -1,19 +1,22 @@
 from ultralytics import YOLO
+from pathlib import Path
 
 if __name__ == '__main__':
-    # 断点续练
-    # model = YOLO(r"F:\sjh\code\ultralytics\runs\detect\cfg\weights\last.pt")
-    # model.train(resume=True)
+
 
     # 加载模型
-    model = YOLO("yolov8s-RFA.yaml")  # 从头开始构建新模型
+    model = YOLO("ultralytics/models/config/improve/yolov8n-SPPCSPC.yaml")  # 从头开始构建新模型
     # model = YOLO("runs/detect/v5n9/weights/best.pt")  # 加载预训练模型（推荐用于训练）
-
     # Use the model
-    results = model.train(data="VOC_five.yaml", epochs=100, batch=16, imgsz=640, workers=8, close_mosaic=0, name='8s_SKConv_dfl1.2')  # 训练模型
+    results = model.train(data="ultralytics/datasets/Helmet.yaml",
+                          epochs=100, batch=16, imgsz=640, workers=8, name=Path(model.cfg).stem)  # 训练模型
     # results = model.val()  # 在验证集上评估模型性能
     # results = model("https://ultralytics.com/images/bus.jpg")  # 预测图像
     # success = model.export(format="onnx")  # 将模型导出为 ONNX 格式
+
+    # """ 断点续练"""
+    # model = YOLO(r"F:\sjh\code\ultralytics\runs\detect\cfg\weights\last.pt")
+    # model.train(resume=True)
 
 # CIL调用方式
 # # Build a new model from YAML and start training from scratch
