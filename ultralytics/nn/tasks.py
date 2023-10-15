@@ -529,7 +529,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         # """**************add Attention***************"""
         elif m in {GAM_Attention, SpectralAttention, SoftThresholdAttentionResidual, MultiSpectralAttentionLayer, CBAM,EffectiveSEModule,
                    CAMConv, CAConv, CBAMConv, RFAConv, LightweightSPPFA, SPPA_CBAM, SPPFC, PSAMix, ResidualGroupConv, PSAModule_s,
-                   DyMCAConv, DyCAConv, CAConv2, SKConv,  GSConv, VoVGSCSP, SPPCSPC}:
+                   DyMCAConv, DyCAConv, CAConv2, SKConv,  GSConv, VoVGSCSP, SPPCSPC, deformable_LKA_Attention, deformable_LKA_Attention_experimental}:
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if not output
                 c2 = make_divisible(min(c2, max_channels) * width, 8)

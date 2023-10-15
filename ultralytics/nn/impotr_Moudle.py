@@ -8,7 +8,7 @@ from ultralytics.nn.add_models.my_attention import *
 from ultralytics.nn.fighting_model.backbone.repghost import RepGhostBottleneck
 
 
-
+from ultralytics.nn.fighting_model.attention.D_LKA_Attention import deformable_LKA_Attention_experimental, deformable_LKA_Attention
 
 from ultralytics.nn.fighting_model.conv.ODConv import ODConv2d
 from ultralytics.nn.fighting_model.conv.MBConv import MBConvBlock
