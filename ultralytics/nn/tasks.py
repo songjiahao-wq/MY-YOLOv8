@@ -506,7 +506,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         if m in (Classify, Conv, ConvTranspose, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, Focus,
                  BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, nn.ConvTranspose2d, DWConvTranspose2d, C3x, RepC3,
                  C2f_Bottleneck_ATT, C2f_Faster, SPPF_Biformer, BiLevelRoutingAttention, stem, MBConvBlock, FusedMBConv, MBConv, C2f_PConv, RFCAConv,
-                 PSA, DCNv22, C2f_Res2, C2f_ODConv, MobileNet_Block, conv_bn_hswish, C2f_GSConv, C2f_CoorConv):
+                 PSA, DCNv22, C2f_Res2, C2f_ODConv, MobileNet_Block, conv_bn_hswish, C2f_GSConv, C2f_CoorConv,
+                 DySnakeConv):
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)

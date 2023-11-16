@@ -15,3 +15,4 @@ from ultralytics.nn.fighting_model.conv.MBConv import MBConvBlock
 from ultralytics.nn.fighting_model.conv.CondConv import CondConv
 from ultralytics.nn.fighting_model.conv.DynamicConv import DynamicConv
 from ultralytics.nn.fighting_model.conv.HorNet import gnconv  # use: gnconv(dim), c1 = c2
+from ultralytics.nn.fighting_model.conv.DySnakeConv import DySnakeConv, DySnakeConv2
