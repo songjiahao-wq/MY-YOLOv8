@@ -4,7 +4,7 @@ if __name__ == '__main__':
     model = YOLO(r"D:\yanyi\project_process\ultralytics\runs\detect\train2\weights/best.pt")  # 加载预训练模型（推荐用于训练）
     results = model.val(data="NEU.yaml",batch=1)  # 在验证集上评估模型性能
     # Validate the model
-    metrics = model.val()  # no arguments needed, dataset and settings remembered
+    metrics = results  # no arguments needed, dataset and settings remembered
     metrics.box.map  # map50-95
     metrics.box.map50  # map50
     metrics.box.map75  # map75
